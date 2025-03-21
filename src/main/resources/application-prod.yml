@@ -1,0 +1,57 @@
+riot:
+  api:
+    key: ${RIOT_API_KEY}
+jwt:
+  secret:
+    key: ${JWT_SECRET_KEY}
+
+spring:
+  application:
+    name: lol-hae-duo
+
+  datasource:
+    url: ${MYSQL_URL}
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jackson:
+    deserialization:
+      ACCEPT_EMPTY_STRING_AS_NULL_OBJECT: true
+
+  jpa:
+    hibernate:
+      ddl-auto: update # 개발 중에는 update, 운영에서는 validate 또는 none 권장
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect # MySQL 버전에 맞는 Dialect 사용
+        format_sql: true
+        show-sql: true
+
+logging:
+  level:
+    org:
+      hibernate:
+        SQL: debug # SQL 디버그 정보 출력
+
+# 모니터링
+management:
+  endpoints:
+    enabled-by-default: false           # Endpoint all disable
+    jmx:
+      exposure:
+        exclude: "*"                    # Exclude all endpoint for JMX
+    web:
+      exposure:
+        exclude: env, bean, heapdump, threaddump, configrops, quartz
+        include: metrics, prometheus    # Expose specific endpoints
+      base-path: /summoner              # Change Actuator Default path
+  endpoint:
+    metrics:
+      enabled: true                     # Enable metric endpoint
+    prometheus:
+      enabled: true                     # Enable prometheus endpoint
+  server:
+    port: 8081                          # Use other port for Actuator
+  metrics:
+    tags:
+      application: ${spring.application.name}
