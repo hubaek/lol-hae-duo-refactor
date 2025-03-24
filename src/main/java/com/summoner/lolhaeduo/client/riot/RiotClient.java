@@ -1,9 +1,6 @@
 package com.summoner.lolhaeduo.client.riot;
 
-import com.summoner.lolhaeduo.client.dto.FormattedMatchResponse;
-import com.summoner.lolhaeduo.client.dto.LeagueEntryResponse;
-import com.summoner.lolhaeduo.client.dto.PuuidResponse;
-import com.summoner.lolhaeduo.client.dto.SummonerResponse;
+import com.summoner.lolhaeduo.client.dto.*;
 import com.summoner.lolhaeduo.domain.account.enums.AccountRegion;
 import com.summoner.lolhaeduo.domain.account.enums.AccountServer;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -176,43 +173,43 @@ public class RiotClient {
             backoff = @Backoff(delay = 5000)
     )
     public FormattedMatchResponse getMatchDetails(String matchId, String summonerName, String tagLine, AccountRegion region) {
-//        // Choose regional URL
-//        String baseUrl = regionBaseUrls.getOrDefault(region.toString(), null);
-//        if (baseUrl == null) {
-//            throw new IllegalArgumentException("Invalid region specified: " + region);
-//        }
-//
-//        // Set request URL
-//        String url = String.format(
-//                "%s/lol/match/v5/matches/%s?api_key=%s",
-//                baseUrl, matchId, apiKey
-//        );
-//
-//        MatchResponse matchResponse = restTemplate.getForObject(url, MatchResponse.class);
-//        if (matchResponse == null || matchResponse.getInfo() == null || matchResponse.getInfo().getParticipants() == null) {
-//            throw new IllegalArgumentException("Invalid match specified: " + matchId);
-//        }
-//
-//        // Filter participants
-//        return matchResponse.getInfo().getParticipants().stream()
-//                .filter(p -> summonerName.equals(p.getRiotIdGameName()) && tagLine.equals(p.getRiotIdTagline()))
-//                .map(target -> new FormattedMatchResponse(
-//                        target.getChampionName(),
-//                        target.getKills(),
-//                        target.getDeaths(),
-//                        target.getAssists(),
-//                        target.isWin()
-//                ))
-//                .findFirst()
-//                .orElseThrow(
-//                        () -> new IllegalArgumentException("No matching participant found in the match")
-//                );
+        // Choose regional URL
+        String baseUrl = regionBaseUrls.getOrDefault(region.toString(), null);
+        if (baseUrl == null) {
+            throw new IllegalArgumentException("Invalid region specified: " + region);
+        }
 
-        // 직접 제작한 Lambda Function 으로 랜덤한 매치 데이터를 받습니다.
-        String baseUrl = "https://oprimofm4f.execute-api.ap-northeast-2.amazonaws.com/default/getMatchDetails";
+        // Set request URL
+        String url = String.format(
+                "%s/lol/match/v5/matches/%s?api_key=%s",
+                baseUrl, matchId, apiKey
+        );
 
-        ResponseEntity<FormattedMatchResponse> response = restTemplate.getForEntity(baseUrl, FormattedMatchResponse.class);
-        return response.getBody();
+        MatchResponse matchResponse = restTemplate.getForObject(url, MatchResponse.class);
+        if (matchResponse == null || matchResponse.getInfo() == null || matchResponse.getInfo().getParticipants() == null) {
+            throw new IllegalArgumentException("Invalid match specified: " + matchId);
+        }
+
+        // Filter participants
+        return matchResponse.getInfo().getParticipants().stream()
+                .filter(p -> summonerName.equals(p.getRiotIdGameName()) && tagLine.equals(p.getRiotIdTagline()))
+                .map(target -> new FormattedMatchResponse(
+                        target.getChampionName(),
+                        target.getKills(),
+                        target.getDeaths(),
+                        target.getAssists(),
+                        target.isWin()
+                ))
+                .findFirst()
+                .orElseThrow(
+                        () -> new IllegalArgumentException("No matching participant found in the match")
+                );
+
+//        // 직접 제작한 Lambda Function 으로 랜덤한 매치 데이터를 받습니다.
+//        String baseUrl = "https://oprimofm4f.execute-api.ap-northeast-2.amazonaws.com/default/getMatchDetails";
+
+//        ResponseEntity<FormattedMatchResponse> response = restTemplate.getForEntity(baseUrl, FormattedMatchResponse.class);
+//        return response.getBody();
     }
 
     @Recover
