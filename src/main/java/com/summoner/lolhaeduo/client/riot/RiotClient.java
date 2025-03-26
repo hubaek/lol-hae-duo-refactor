@@ -70,33 +70,27 @@ public class RiotClient {
     }
 
     public PuuidResponse extractPuuid(String summonerName, String tagLine, AccountRegion region) {
-        // Choose regional URL
         String baseUrl = regionBaseUrls.getOrDefault(region.toString(), null);
         if (baseUrl == null) {
             throw new IllegalArgumentException("Invalid region specified: " + region);
         }
 
-        // Set request URL
         String url = String.format(
                 "%s/riot/account/v1/accounts/by-riot-id/%s/%s?api_key=%s",
                 baseUrl, summonerName, tagLine, apiKey
         );
 
-        // Execute request
         return restTemplate.getForObject(url, PuuidResponse.class);
     }
 
     public SummonerResponse extractSummonerInfo(String puuid, AccountServer server) {
-        // Server code
         String serverDomain = server.name().toLowerCase();
 
-        // Set request URL
         String url = String.format(
                 "https://%s.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/%s?api_key=%s",
                 serverDomain, puuid, apiKey
         );
 
-        // Execute request
         return restTemplate.getForObject(url, SummonerResponse.class);
     }
 
@@ -120,13 +114,11 @@ public class RiotClient {
 
     public List<String> extractMatchIds(Long startTime, Long endTime, Integer queue, String type,
                                         Integer start, Integer count, AccountRegion region, String puuid) {
-        // Choose regional URL
         String baseUrl = regionBaseUrls.getOrDefault(region.toString(), null);
         if (baseUrl == null) {
             throw new IllegalArgumentException("Invalid region specified: " + region);
         }
 
-        // Build URL dynamically
         StringBuilder urlBuilder = new StringBuilder(
                 String.format("%s/lol/match/v5/matches/by-puuid/%s/ids?", baseUrl, puuid)
         );
@@ -173,13 +165,11 @@ public class RiotClient {
             backoff = @Backoff(delay = 5000)
     )
     public FormattedMatchResponse getMatchDetails(String matchId, String summonerName, String tagLine, AccountRegion region) {
-        // Choose regional URL
         String baseUrl = regionBaseUrls.getOrDefault(region.toString(), null);
         if (baseUrl == null) {
             throw new IllegalArgumentException("Invalid region specified: " + region);
         }
 
-        // Set request URL
         String url = String.format(
                 "%s/lol/match/v5/matches/%s?api_key=%s",
                 baseUrl, matchId, apiKey
@@ -190,7 +180,6 @@ public class RiotClient {
             throw new IllegalArgumentException("Invalid match specified: " + matchId);
         }
 
-        // Filter participants
         return matchResponse.getInfo().getParticipants().stream()
                 .filter(p -> summonerName.equals(p.getRiotIdGameName()) && tagLine.equals(p.getRiotIdTagline()))
                 .map(target -> new FormattedMatchResponse(
@@ -205,11 +194,6 @@ public class RiotClient {
                         () -> new IllegalArgumentException("No matching participant found in the match")
                 );
 
-//        // 직접 제작한 Lambda Function 으로 랜덤한 매치 데이터를 받습니다.
-//        String baseUrl = "https://oprimofm4f.execute-api.ap-northeast-2.amazonaws.com/default/getMatchDetails";
-
-//        ResponseEntity<FormattedMatchResponse> response = restTemplate.getForEntity(baseUrl, FormattedMatchResponse.class);
-//        return response.getBody();
     }
 
     @Recover
