@@ -1,28 +1,28 @@
-# .github/workflows/cr.yml 파일 생성
+# .github/workflows/main.yml 파일 생성
 
-name: Code Review
+# name: Code Review
 
-permissions:
-  contents: read
-  pull-requests: write
+# permissions:
+#   contents: read
+#   pull-requests: write
 
-on:
-  pull_request:
-    types: 
-      - opened
-      - synchronize
+# on:
+#   pull_request:
+#     types: 
+#       - opened
+#       - synchronize
 
-jobs:
-  review:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v3
+# jobs:
+#   review:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout Repo
+#         uses: actions/checkout@v3
         
-      - uses: hubaek/ChatGPT-CodeReview@main
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_API_MODEL: "gpt-4"
-          exclude: "**/*.json, **/*.md"
-          LANGUAGE: Korean
+#       - uses: hubaek/ChatGPT-CodeReview@main
+#         with:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+#           OPENAI_API_MODEL: "gpt-4"
+#           exclude: "**/*.json, **/*.md"
+#           LANGUAGE: Korean
