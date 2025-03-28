@@ -143,7 +143,7 @@ public class RiotClient {
         if (count != null) {
             urlBuilder.append("count=").append(count).append("&");
         } else {
-            urlBuilder.append("count=20&");
+            urlBuilder.append("count=5&");
         }
 
         urlBuilder.append("api_key=").append(apiKey);
