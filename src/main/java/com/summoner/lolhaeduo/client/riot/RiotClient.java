@@ -161,6 +161,7 @@ public class RiotClient {
     }
 
     @Retryable(
+            retryFor = { RestClientException.class },
             maxAttempts = 5,
             backoff = @Backoff(delay = 5000)
     )
