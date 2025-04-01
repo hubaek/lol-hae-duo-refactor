@@ -69,6 +69,7 @@ public class RiotClient {
         });
     }
 
+    // todo : refactor baseUrl 매직스트링(상수)으로 만들기
     public PuuidResponse extractPuuid(String summonerName, String tagLine, AccountRegion region) {
         String baseUrl = regionBaseUrls.getOrDefault(region.toString(), null);
         if (baseUrl == null) {
@@ -83,6 +84,7 @@ public class RiotClient {
         return restTemplate.getForObject(url, PuuidResponse.class);
     }
 
+    // todo : refactor serverDomain 매직스트링(상수)으로 만들기
     public SummonerResponse extractSummonerInfo(String puuid, AccountServer server) {
         String serverDomain = server.name().toLowerCase();
 

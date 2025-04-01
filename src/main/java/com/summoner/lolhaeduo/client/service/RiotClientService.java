@@ -116,6 +116,15 @@ public class RiotClientService {
         List<String> matchIds = new ArrayList<>();
         int totalRetrieved = 0;
 
+        // todo
+        //  1. playCount가 0인 경우는 어떻게 처리할지 고민해보기
+        //  1-1. playCount가 0인 경우는 아예 API를 호출하지 않음
+        //  2. count = 5로 고정해서 최근 5판만 가져오도록 수정
+        //  3. if (queueType == QUICK) else구문을 없애고, queueType에 따라 다르게 처리하도록 수정
+        //  3-1. queueType이 QUICK인 경우는 quickGameData를 가져오도록 수정
+        //  3-2. queueType이 SOLO인 경우는 soloRankData를 가져오고, FLEX인 경우는 flexRankData를 가져오도록 수정
+        //  4. if문에 totalRetrieved는 추후에 추가할 수 있도록 로직 수정 (현재는 최근 5판만)
+
         if (queueType == QUICK) {
             int start = 0;
             while (true) {
@@ -130,6 +139,9 @@ public class RiotClientService {
             }
         } else {
             // 랭크 게임의 경우 playCount에 따라 100판 단위로 API 호출
+            // todo : count = 5로 고정해서 최근 5판만 가져오도록 수정
+            //  -> 추후 Production Key 받으면 전체 판 수 가져오기
+
             while (totalRetrieved < playCount) {
                 int count = Math.min(MAX_METHOD_CALL, playCount - totalRetrieved);
                 List<String> partialMatchIds = riotClient.extractMatchIds(
