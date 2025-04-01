@@ -53,6 +53,9 @@ public class AccountGameDataService {
 
         // 매치 아이디 가져오기
         // 빠른 대전의 경우 플레이한 매치 수 정보를 사용하지 않는다.
+        // todo :
+        //  현재 수정본은 solo, flex의 경우 플레이한 매치 수를 사용하고 있다. 이 부분은 나중에 수정해야함
+        //  solo만 5경기 가져올 수 있도록? - Rate Limit때문에 or 각 5경기씩 해서 Rate limit 제한 걸기?(Bucket4j)
         List<String> quickMatchIds = riotClientService.getMatchIds(QUICK, 0, account.getRegion(), account.getRiotAccountInfo().getPuuid());
         List<String> soloMatchIds = riotClientService.getMatchIds(SOLO, rankStats.getSoloTotalGames(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
         List<String> flexMatchIds = riotClientService.getMatchIds(FLEX, rankStats.getFlexTotalGames(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
@@ -93,6 +96,9 @@ public class AccountGameDataService {
         }
 
         // 각각 데이터 객체 생성
+        // todo 
+        //  account 객체 만들때, profileIconUrl을 받을 수 있는데, 한번더 SUMMONER api를 호출해야할지 생각 해봐야함
+        //  account 객체 생성할때 accountgamedata에 profileIconUrl을 넣는건 어떨지?
         String iconUrl = riotClientService.updateProfileIconUrl(account);
 
         AccountGameData newAccountGameData = AccountGameData.of(iconUrl, quickGameData, soloRankData, flexRankData);

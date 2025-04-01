@@ -59,6 +59,11 @@ public class RiotClientService {
         );
     }
 
+    // todo
+    //  처음 account 생성할 때 profileIconUrl을 가져오는 로직을 추가해야함?
+    //  업데이트에 SummonerResponse를 사용하고 있는데, 이걸로 가져오는게 맞는지 확인 필요
+    //
+
     public String updateProfileIconUrl(Account account) {
         SummonerResponse response = riotClient.extractSummonerInfo(account.getRiotAccountInfo().getPuuid(), account.getServer());
         int accountProfileIconId = response.getProfileIconId();
