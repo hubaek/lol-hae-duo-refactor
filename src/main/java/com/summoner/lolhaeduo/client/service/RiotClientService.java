@@ -8,7 +8,7 @@ import com.summoner.lolhaeduo.client.riot.RiotClient;
 import com.summoner.lolhaeduo.common.util.TimeUtil;
 import com.summoner.lolhaeduo.domain.account.dto.LinkAccountRequest;
 import com.summoner.lolhaeduo.domain.account.entity.Account;
-import com.summoner.lolhaeduo.domain.account.entity.AccountDetail;
+import com.summoner.lolhaeduo.domain.account.entity.RiotAccountInfo;
 import com.summoner.lolhaeduo.domain.account.enums.AccountRegion;
 import com.summoner.lolhaeduo.domain.account.enums.AccountServer;
 import com.summoner.lolhaeduo.domain.duo.enums.QueueType;
@@ -40,7 +40,7 @@ public class RiotClientService {
     private static final int PERIOD_OF_RECENT_MATCH = 30;
     private static final int MAX_METHOD_CALL = 100;
 
-    public AccountDetail createAccountDetail(LinkAccountRequest request) {
+    public RiotAccountInfo createRiotAccountInfo(LinkAccountRequest request) {
         PuuidResponse puuidResponse = riotClient.extractPuuid(
                 request.getSummonerName(),
                 request.getTagLine(),
@@ -52,7 +52,7 @@ public class RiotClientService {
                 request.getServer()
         );
 
-        return AccountDetail.of(
+        return RiotAccountInfo.fromRiotApi(
                 puuidResponse.getPuuid(),
                 summonerResponse.getAccountId(),
                 summonerResponse.getId()
@@ -60,7 +60,7 @@ public class RiotClientService {
     }
 
     public String updateProfileIconUrl(Account account) {
-        SummonerResponse response = riotClient.extractSummonerInfo(account.getAccountDetail().getPuuid(), account.getServer());
+        SummonerResponse response = riotClient.extractSummonerInfo(account.getRiotAccountInfo().getPuuid(), account.getServer());
         int accountProfileIconId = response.getProfileIconId();
 
         String latestVersion = versionRepository.findLatestVersion().getVersionNumber();

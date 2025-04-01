@@ -5,7 +5,7 @@ import com.summoner.lolhaeduo.common.event.AccountGameDataEvent;
 import com.summoner.lolhaeduo.domain.account.dto.LinkAccountRequest;
 import com.summoner.lolhaeduo.domain.account.dto.LinkAccountResponse;
 import com.summoner.lolhaeduo.domain.account.entity.Account;
-import com.summoner.lolhaeduo.domain.account.entity.AccountDetail;
+import com.summoner.lolhaeduo.domain.account.entity.RiotAccountInfo;
 import com.summoner.lolhaeduo.domain.account.repository.AccountRepository;
 import com.summoner.lolhaeduo.domain.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +40,7 @@ public class AccountService {
         }
 
         if (request.getAccountType().equals(RIOT)) {
-            AccountDetail newAccountDetail = riotClientService.createAccountDetail(request);
+            RiotAccountInfo newRiotAccountInfo = riotClientService.createRiotAccountInfo(request);
 
             Account newAccount = Account.of(
                     request.getAccountUsername(),
@@ -49,7 +49,7 @@ public class AccountService {
                     request.getSummonerName(),
                     request.getTagLine(),
                     request.getServer(),
-                    newAccountDetail,
+                    newRiotAccountInfo,
                     memberId
             );
 

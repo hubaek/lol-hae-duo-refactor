@@ -49,13 +49,13 @@ public class AccountGameDataService {
         long startTime = System.currentTimeMillis();
 
         // 랭크 정보 가져오기
-        RankStats rankStats = riotClientService.getRankGameStats(account.getAccountDetail().getEncryptedSummonerId(), account.getServer());
+        RankStats rankStats = riotClientService.getRankGameStats(account.getRiotAccountInfo().getEncryptedSummonerId(), account.getServer());
 
         // 매치 아이디 가져오기
         // 빠른 대전의 경우 플레이한 매치 수 정보를 사용하지 않는다.
-        List<String> quickMatchIds = riotClientService.getMatchIds(QUICK, 0, account.getRegion(), account.getAccountDetail().getPuuid());
-        List<String> soloMatchIds = riotClientService.getMatchIds(SOLO, rankStats.getSoloTotalGames(), account.getRegion(), account.getAccountDetail().getPuuid());
-        List<String> flexMatchIds = riotClientService.getMatchIds(FLEX, rankStats.getFlexTotalGames(), account.getRegion(), account.getAccountDetail().getPuuid());
+        List<String> quickMatchIds = riotClientService.getMatchIds(QUICK, 0, account.getRegion(), account.getRiotAccountInfo().getPuuid());
+        List<String> soloMatchIds = riotClientService.getMatchIds(SOLO, rankStats.getSoloTotalGames(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
+        List<String> flexMatchIds = riotClientService.getMatchIds(FLEX, rankStats.getFlexTotalGames(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
 
         QuickGameData quickGameData = null;
         if (!quickMatchIds.isEmpty()) {
@@ -119,11 +119,11 @@ public class AccountGameDataService {
         String updatedProfileIconUrl = riotClientService.updateProfileIconUrl(account);
 
         // 4. 반영해야할 매치 ID가 있는지 조회한다.
-        RankStats rankStats = riotClientService.getRankGameStats(account.getAccountDetail().getEncryptedSummonerId(), account.getServer());
+        RankStats rankStats = riotClientService.getRankGameStats(account.getRiotAccountInfo().getEncryptedSummonerId(), account.getServer());
 
-        List<String> quickMatchIds = riotClientService.updateMatchIds(QUICK, modifiedAt, account.getRegion(), account.getAccountDetail().getPuuid());
-        List<String> soloMatchIds = riotClientService.updateMatchIds(SOLO, modifiedAt, account.getRegion(), account.getAccountDetail().getPuuid());
-        List<String> flexMatchIds = riotClientService.updateMatchIds(FLEX, modifiedAt, account.getRegion(), account.getAccountDetail().getPuuid());
+        List<String> quickMatchIds = riotClientService.updateMatchIds(QUICK, modifiedAt, account.getRegion(), account.getRiotAccountInfo().getPuuid());
+        List<String> soloMatchIds = riotClientService.updateMatchIds(SOLO, modifiedAt, account.getRegion(), account.getRiotAccountInfo().getPuuid());
+        List<String> flexMatchIds = riotClientService.updateMatchIds(FLEX, modifiedAt, account.getRegion(), account.getRiotAccountInfo().getPuuid());
 
         if (!quickMatchIds.isEmpty()) {
             MatchStats quickStats = riotClientService.getMatchStats(account.getId(), quickMatchIds, QUICK, account.getSummonerName(), account.getTagLine(), account.getRegion());

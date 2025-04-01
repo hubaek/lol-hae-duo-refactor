@@ -43,7 +43,7 @@ public class Account extends Timestamped {
 	private AccountServer server;
 
 	@Embedded
-	private AccountDetail accountDetail;
+	private RiotAccountInfo riotAccountInfo;
 
 	@OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
 	private AccountGameData accountGameData;
@@ -51,7 +51,7 @@ public class Account extends Timestamped {
 	@Column(nullable = false)
 	private Long memberId;
 
-	private Account(String username, String password, AccountType accountType, String summonerName, String tagLine, AccountServer server, AccountDetail accountDetail, Long memberId) {
+	private Account(String username, String password, AccountType accountType, String summonerName, String tagLine, AccountServer server, RiotAccountInfo riotAccountInfo, Long memberId) {
 		this.username = username;
 		this.password = password;
 		this.accountType = accountType;
@@ -59,12 +59,12 @@ public class Account extends Timestamped {
 		this.tagLine = tagLine;
 		this.server = server;
 		this.region = server.getRegion();
-		this.accountDetail = accountDetail;
+		this.riotAccountInfo = riotAccountInfo;
 		this.memberId = memberId;
 	}
 
-	public static Account of(String username, String password, AccountType accountType, String summonerName, String tagLine, AccountServer server, AccountDetail accountDetail,  Long memberId) {
-		return new Account(username, password, accountType, summonerName, tagLine, server, accountDetail, memberId);
+	public static Account of(String username, String password, AccountType accountType, String summonerName, String tagLine, AccountServer server, RiotAccountInfo riotAccountInfo, Long memberId) {
+		return new Account(username, password, accountType, summonerName, tagLine, server, riotAccountInfo, memberId);
 	}
 
 	// AccountGameData 연동하는 메서드
