@@ -54,20 +54,25 @@ public class AccountGameDataService {
         List<String> soloMatchIds = riotClientService.getMatchIds(SOLO, account.getRegion(), account.getRiotAccountInfo().getPuuid());
         List<String> flexMatchIds = riotClientService.getMatchIds(FLEX, account.getRegion(), account.getRiotAccountInfo().getPuuid());
 
-        QuickGameData quickGameData = null;
+        MatchStats quickStats = null;
         if (!quickMatchIds.isEmpty()) {
-            MatchStats quickStats = riotClientService.getMatchStats(account.getId(), quickMatchIds, QUICK, account.getSummonerName(), account.getTagLine(), account.getRegion());
+            quickStats = riotClientService.getMatchStats(account.getId(), quickMatchIds, QUICK, account.getSummonerName(), account.getTagLine(), account.getRegion());
+        }
+
+        QuickGameData quickGameData;
+        if (quickStats != null) {
             quickGameData = QuickGameData.of(
                     quickStats.getWins(), quickStats.getTotalGames(),
                     Kda.of(quickStats.getAverageKill(), quickStats.getAverageAssist(), quickStats.getAverageDeath())
             );
         } else {
-            quickGameData = QuickGameData.of(0, 0, Kda.of(0,0,0));
+            quickGameData = QuickGameData.of(0, 0, Kda.of(0, 0, 0));
         }
 
-        SoloRankData soloRankData = null;
+        MatchStats soloStats = null;
+        SoloRankData soloRankData;
         if (!soloMatchIds.isEmpty()) {
-            MatchStats soloStats = riotClientService.getMatchStats(account.getId(), soloMatchIds, SOLO, account.getSummonerName(), account.getTagLine(), account.getRegion());
+            soloStats = riotClientService.getMatchStats(account.getId(), soloMatchIds, SOLO, account.getSummonerName(), account.getTagLine(), account.getRegion());
             soloRankData = SoloRankData.of(
                     rankStats.getSoloTier(), rankStats.getSoloRank(),
                     soloStats.getWins(), soloStats.getTotalGames(),
@@ -77,9 +82,10 @@ public class AccountGameDataService {
             soloRankData = SoloRankData.of("UNRANKED", "N/A", 0, 0, Kda.of(0,0,0));
         }
 
-        FlexRankData flexRankData = null;
+        MatchStats flexStats = null;
+        FlexRankData flexRankData;
         if (!flexMatchIds.isEmpty()) {
-            MatchStats flexStats = riotClientService.getMatchStats(account.getId(), flexMatchIds, FLEX, account.getSummonerName(), account.getTagLine(), account.getRegion());
+            flexStats = riotClientService.getMatchStats(account.getId(), flexMatchIds, FLEX, account.getSummonerName(), account.getTagLine(), account.getRegion());
             flexRankData = FlexRankData.of(
                     rankStats.getFlexTier(), rankStats.getFlexRank(),
                     flexStats.getWins(), flexStats.getTotalGames(),
