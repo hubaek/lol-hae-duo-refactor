@@ -211,9 +211,15 @@ public class RiotClientService {
     private FormattedMatchResponse fetchMatchData(String matchId, String summonerName, String tagLine, AccountRegion region) {
         long threadId = Thread.currentThread().getId();
         String threadName = Thread.currentThread().getName();
+        long startTime = System.currentTimeMillis();
+
         log.info("Thread ID: {}, Name: {} is processing matchId: {}", threadId, threadName, matchId);
 
         FormattedMatchResponse matchResponse = riotClient.getMatchDetails(matchId, summonerName, tagLine, region);
+
+        long duration = System.currentTimeMillis() - startTime;
+        log.info("matchId: {} 처리 완료 ({} ms)", matchId, duration);
+
         if (matchResponse != null) {
             return new FormattedMatchResponse(
                 matchResponse.getChampionName(),
