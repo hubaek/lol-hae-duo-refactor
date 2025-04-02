@@ -48,17 +48,11 @@ public class AccountGameDataService {
         );
         long startTime = System.currentTimeMillis();
 
-        // 랭크 정보 가져오기
         RankStats rankStats = riotClientService.getRankGameStats(account.getRiotAccountInfo().getEncryptedSummonerId(), account.getServer());
 
-        // 매치 아이디 가져오기
-        // 빠른 대전의 경우 플레이한 매치 수 정보를 사용하지 않는다.
-        // todo :
-        //  현재 수정본은 solo, flex의 경우 플레이한 매치 수를 사용하고 있다. 이 부분은 나중에 수정해야함
-        //  solo만 5경기 가져올 수 있도록? - Rate Limit때문에 or 각 5경기씩 해서 Rate limit 제한 걸기?(Bucket4j)
-        List<String> quickMatchIds = riotClientService.getMatchIds(QUICK, 0, account.getRegion(), account.getRiotAccountInfo().getPuuid());
-        List<String> soloMatchIds = riotClientService.getMatchIds(SOLO, rankStats.getSoloTotalGames(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
-        List<String> flexMatchIds = riotClientService.getMatchIds(FLEX, rankStats.getFlexTotalGames(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
+        List<String> quickMatchIds = riotClientService.getMatchIds(QUICK, account.getRegion(), account.getRiotAccountInfo().getPuuid());
+        List<String> soloMatchIds = riotClientService.getMatchIds(SOLO, account.getRegion(), account.getRiotAccountInfo().getPuuid());
+        List<String> flexMatchIds = riotClientService.getMatchIds(FLEX, account.getRegion(), account.getRiotAccountInfo().getPuuid());
 
         QuickGameData quickGameData = null;
         if (!quickMatchIds.isEmpty()) {
