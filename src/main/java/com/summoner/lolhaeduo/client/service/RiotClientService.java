@@ -157,10 +157,10 @@ public class RiotClientService {
         double averageDeath = accumulator.getAverageDeaths(totalGames);
         double averageAssist = accumulator.getAverageAssists(totalGames);
 
-        for (Map.Entry<String, Integer> entry : accumulator.champCount.entrySet()) {
+        for (Map.Entry<String, Integer> entry : accumulator.getChampCount().entrySet()) {
             String championName = entry.getKey();
             int playCount = entry.getValue();
-            int championWinCount = accumulator.winCountMap.getOrDefault(championName, 0);
+            int championWinCount = accumulator.getWinCountMap().getOrDefault(championName, 0);
 
             Favorite existingFavorite = favoriteRepository.findByAccountIdAndQueueTypeAndChampionName(accountId, queueType, championName);
 
@@ -173,7 +173,7 @@ public class RiotClientService {
         }
 
         return new MatchStats(
-                accumulator.winCount, totalGames - accumulator.winCount, totalGames, queueType,
+                accumulator.getWinCount(), totalGames - accumulator.getWinCount(), totalGames, queueType,
                 winRate, averageKill, averageDeath, averageAssist
         );
     }
@@ -227,12 +227,12 @@ public class RiotClientService {
     }
 
     private static class MatchStatAccumulator {
-        int totalKills;
-        int totalDeaths;
-        int totalAssists;
-        int winCount;
-        Map<String, Integer> champCount;
-        Map<String, Integer> winCountMap;
+        private final int totalKills;
+        private final int totalDeaths;
+        private final int totalAssists;
+        private final int winCount;
+        private final Map<String, Integer> champCount;
+        private final Map<String, Integer> winCountMap;
 
         MatchStatAccumulator(int totalKills, int totalDeaths, int totalAssists, int winCount,
                              Map<String, Integer> champCount, Map<String, Integer> winCountMap) {
@@ -242,6 +242,18 @@ public class RiotClientService {
             this.winCount = winCount;
             this.champCount = champCount;
             this.winCountMap = winCountMap;
+        }
+
+        public int getWinCount() {
+            return winCount;
+        }
+
+        public Map<String, Integer> getChampCount() {
+            return champCount;
+        }
+
+        public Map<String, Integer> getWinCountMap() {
+            return winCountMap;
         }
 
         public double getAverageKills(int totalGames) {
