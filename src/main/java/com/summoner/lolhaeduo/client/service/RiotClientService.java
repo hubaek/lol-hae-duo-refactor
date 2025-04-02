@@ -36,7 +36,7 @@ public class RiotClientService {
     private final VersionRepository versionRepository;
     private final FavoriteRepository favoriteRepository;
 
-    private static final int NUMBER_OF_RECENT_MATCH = 20;
+    private static final int RECENT_MATCH_COUNT = 10;
     private static final int PERIOD_OF_RECENT_MATCH = 30;
     private static final int MAX_METHOD_CALL = 100;
 
@@ -113,14 +113,13 @@ public class RiotClientService {
     }
 
     public List<String> getMatchIds(QueueType queueType, AccountRegion region, String puuid) {
-        if (queueType == QUICK) {
-            return riotClient.extractMatchIds(null, null, QUICK.getQueueId(), null, 0, 10, region, puuid);
-        }
-        if (queueType == SOLO) {
-            return riotClient.extractMatchIds(null, null, SOLO.getQueueId(), null, 0, 10, region, puuid);
-        }
-        if (queueType == FLEX) {
-            return riotClient.extractMatchIds(null, null, FLEX.getQueueId(), null, 0, 10, region, puuid);
+
+        if (queueType == QUICK || queueType == SOLO || queueType == FLEX) {
+            return riotClient.extractMatchIds(
+                    null, null,
+                    queueType.getQueueId(),
+                    null, 0, RECENT_MATCH_COUNT, region, puuid
+            );
         }
         throw new IllegalArgumentException("지원하지 않는 큐 타입입니다.");
     }
