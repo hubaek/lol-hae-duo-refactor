@@ -199,6 +199,9 @@ public class RiotClientService {
                 }
             } catch (InterruptedException | ExecutionException e) {
                 log.error("current error: {}", e.getMessage());
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
             }
         }
 
