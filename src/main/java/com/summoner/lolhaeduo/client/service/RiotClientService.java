@@ -59,11 +59,6 @@ public class RiotClientService {
         );
     }
 
-    // todo
-    //  처음 account 생성할 때 profileIconUrl을 가져오는 로직을 추가해야함?
-    //  업데이트에 SummonerResponse를 사용하고 있는데, 이걸로 가져오는게 맞는지 확인 필요
-    //
-
     public String updateProfileIconUrl(Account account) {
         SummonerResponse response = riotClient.extractSummonerInfo(account.getRiotAccountInfo().getPuuid(), account.getServer());
         int accountProfileIconId = response.getProfileIconId();
@@ -117,65 +112,19 @@ public class RiotClientService {
         return new RankStats(soloTotalGames, flexTotalGames, soloWins, soloLosses, soloWinRate, soloTier, soloRank, flexWins, flexLosses, flexWinRate, flexTier, flexRank);
     }
 
-    public List<String> getMatchIds(QueueType queueType, int playCount, AccountRegion region, String puuid) {
-        List<String> matchIds = new ArrayList<>();
-        int totalRetrieved = 0;
-
-        // todo
-        //  1. playCount가 0인 경우는 어떻게 처리할지 고민해보기
-        //  1-1. playCount가 0인 경우는 아예 API를 호출하지 않음
-        //  2. count = 5로 고정해서 최근 5판만 가져오도록 수정
-        //  3. if (queueType == QUICK) else구문을 없애고, queueType에 따라 다르게 처리하도록 수정
-        //  3-1. queueType이 QUICK인 경우는 quickGameData를 가져오도록 수정
-        //  3-2. queueType이 SOLO인 경우는 soloRankData를 가져오고, FLEX인 경우는 flexRankData를 가져오도록 수정
-        //  4. if문에 totalRetrieved는 추후에 추가할 수 있도록 로직 수정 (현재는 최근 5판만)
-
+    public List<String> getMatchIds(QueueType queueType, AccountRegion region, String puuid) {
         if (queueType == QUICK) {
-            int start = 0;
-            while (true) {
-                List<String> partialMatchIds = riotClient.extractMatchIds(null, null, QUICK.getQueueId(), null, start, 100, region, puuid);
-                if (partialMatchIds == null || partialMatchIds.isEmpty()) {
-                    break;
-                }
-
-                matchIds.addAll(partialMatchIds);
-                totalRetrieved += partialMatchIds.size();
-                start += totalRetrieved;
-            }
-        } else {
-            // 랭크 게임의 경우 playCount에 따라 100판 단위로 API 호출
-            // todo : count = 5로 고정해서 최근 5판만 가져오도록 수정
-            //  -> 추후 Production Key 받으면 전체 판 수 가져오기
-
-            while (totalRetrieved < playCount) {
-                int count = Math.min(MAX_METHOD_CALL, playCount - totalRetrieved);
-                List<String> partialMatchIds = riotClient.extractMatchIds(
-                        null, null,
-                        queueType == SOLO ? SOLO.getQueueId() : FLEX.getQueueId(),
-
-                        null, totalRetrieved,
-                        count, region, puuid
-                );
-
-                if (partialMatchIds == null || partialMatchIds.isEmpty()) {
-                    break;
-                }
-
-                matchIds.addAll(partialMatchIds);
-                totalRetrieved += partialMatchIds.size();
-
-                // 만약 가져온 판 수가 예상보다 적다면 더 이상 호출할 필요가 없음
-                if (partialMatchIds.size() < count) {
-                    break;
-                }
-            }
+            return riotClient.extractMatchIds(null, null, QUICK.getQueueId(), null, 0, 10, region, puuid);
         }
-
-        return matchIds;
+        if (queueType == SOLO) {
+            return riotClient.extractMatchIds(null, null, SOLO.getQueueId(), null, 0, 10, region, puuid);
+        }
+        if (queueType == FLEX) {
+            return riotClient.extractMatchIds(null, null, FLEX.getQueueId(), null, 0, 10, region, puuid);
+        }
+        throw new IllegalArgumentException("지원하지 않는 큐 타입입니다.");
     }
 
-    // 수동으로 전적 정보 갱신 시 하루 안에 100번 게임을 할 가능성이 없다고 판단했습니다.
-    // 따라서 RiotClient의 getmatchIds를 한번만 호출해도 필요한 모든 정보를 다 조회할 수 있다고 생각해서, 1번만 호출하게 되었습니다.
     public List<String> updateMatchIds(QueueType queueType, LocalDateTime lastUpdatedAt, AccountRegion region, String puuid) {
         long startTime = timeUtil.convertToEpochSeconds(lastUpdatedAt);
         return riotClient.extractMatchIds(
@@ -187,72 +136,32 @@ public class RiotClientService {
 
     @Transactional
     public MatchStats getMatchStats(Long accountId, List<String> matchIds, QueueType queueType, String summonerName, String tagLine, AccountRegion region) {
-        // 초기화
-        int totalKills = 0, totalDeath = 0, totalAssists = 0, winCount = 0;
         int totalGames = matchIds.size();
         ExecutorService executorService = Executors.newFixedThreadPool(10);
 
         List<Future<FormattedMatchResponse>> futures = new ArrayList<>();
 
         for (String matchId : matchIds) {
-            Callable<FormattedMatchResponse> task = () -> {
-                long threadId = Thread.currentThread().getId();
-                String threadName = Thread.currentThread().getName();
-                log.info("Thread ID: {}, Name: {} is processing matchId: {}", threadId, threadName, matchId);
-
-                FormattedMatchResponse matchResponse = riotClient.getMatchDetails(matchId, summonerName, tagLine, region);
-                if (matchResponse != null) {
-                    return new FormattedMatchResponse(
-                            matchResponse.getChampionName(),
-                            matchResponse.getKills(),
-                            matchResponse.getDeaths(),
-                            matchResponse.getAssists(),
-                            matchResponse.isWin()
-                    );
-                }
-                return null;
-            };
+            Callable<FormattedMatchResponse> task = () -> fetchMatchData(matchId, summonerName, tagLine, region);
             futures.add(executorService.submit(task));
         }
 
-        Map<String, Integer> champCount = new HashMap<>();
-        Map<String, Integer> winCountMap = new HashMap<>();
-
-        // 결과 수집
-        for (Future<FormattedMatchResponse> future : futures) {
-            try {
-                FormattedMatchResponse result = future.get();
-                if (result != null) {
-                    champCount.put(result.getChampionName(), champCount.getOrDefault(result.getChampionName(), 0) + 1);
-                    totalKills += result.getKills();
-                    totalDeath += result.getDeaths();
-                    totalAssists += result.getAssists();
-
-                    if (result.isWin()) {
-                        winCount++;
-                        winCountMap.put(result.getChampionName(), winCountMap.getOrDefault(result.getChampionName(), 0) + 1);
-                    }
-                }
-            } catch (InterruptedException | ExecutionException e) {
-                log.error("current error: {}", e.getMessage());
-            }
-        }
+        MatchStatAccumulator accumulator = collectMatchStats(futures);
 
         executorService.shutdown();
 
         double winRate = 0;
-        if (queueType == QUICK && totalGames > 0) {
-            winRate = (double) winCount / totalGames * 100;
+        if (queueType == QUICK) {
+            winRate = accumulator.getWinRate(totalGames);
         }
-        double averageKill = (double) totalKills / totalGames;
-        double averageDeath = (double) totalDeath / totalGames;
-        double averageAssist = (double) totalAssists / totalGames;
+        double averageKill = accumulator.getAverageKills(totalGames);
+        double averageDeath = accumulator.getAverageDeaths(totalGames);
+        double averageAssist = accumulator.getAverageAssists(totalGames);
 
-        // accountId, queueType, championName으로 생성된 Favorite이 있으면 업데이트하고, 없으면 새로 만든다.
-        for (Map.Entry<String, Integer> entry : champCount.entrySet()) {
+        for (Map.Entry<String, Integer> entry : accumulator.champCount.entrySet()) {
             String championName = entry.getKey();
             int playCount = entry.getValue();
-            int championWinCount = winCountMap.getOrDefault(championName, 0);
+            int championWinCount = accumulator.winCountMap.getOrDefault(championName, 0);
 
             Favorite existingFavorite = favoriteRepository.findByAccountIdAndQueueTypeAndChampionName(accountId, queueType, championName);
 
@@ -265,8 +174,88 @@ public class RiotClientService {
         }
 
         return new MatchStats(
-                winCount, totalGames - winCount, totalGames, queueType,
+                accumulator.winCount, totalGames - accumulator.winCount, totalGames, queueType,
                 winRate, averageKill, averageDeath, averageAssist
         );
+    }
+
+    private MatchStatAccumulator collectMatchStats(List<Future<FormattedMatchResponse>> futures) {
+        int totalKills = 0, totalDeaths = 0, totalAssists = 0, winCount = 0;
+        Map<String, Integer> champCount = new HashMap<>();
+        Map<String, Integer> winCountMap = new HashMap<>();
+
+        for (Future<FormattedMatchResponse> future : futures) {
+            try {
+                FormattedMatchResponse result = future.get();
+                if (result != null) {
+                    champCount.put(result.getChampionName(), champCount.getOrDefault(result.getChampionName(), 0) + 1);
+                    totalKills += result.getKills();
+                    totalDeaths += result.getDeaths();
+                    totalAssists += result.getAssists();
+
+                    if (result.isWin()) {
+                        winCount++;
+                        winCountMap.put(result.getChampionName(), winCountMap.getOrDefault(result.getChampionName(), 0) + 1);
+                    }
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                log.error("current error: {}", e.getMessage());
+            }
+        }
+
+        return new MatchStatAccumulator(totalKills, totalDeaths, totalAssists, winCount, champCount, winCountMap);
+    }
+
+    private FormattedMatchResponse fetchMatchData(String matchId, String summonerName, String tagLine, AccountRegion region) {
+        long threadId = Thread.currentThread().getId();
+        String threadName = Thread.currentThread().getName();
+        log.info("Thread ID: {}, Name: {} is processing matchId: {}", threadId, threadName, matchId);
+
+        FormattedMatchResponse matchResponse = riotClient.getMatchDetails(matchId, summonerName, tagLine, region);
+        if (matchResponse != null) {
+            return new FormattedMatchResponse(
+                matchResponse.getChampionName(),
+                matchResponse.getKills(),
+                matchResponse.getDeaths(),
+                matchResponse.getAssists(),
+                matchResponse.isWin()
+            );
+        }
+        return null;
+    }
+
+    private static class MatchStatAccumulator {
+        int totalKills;
+        int totalDeaths;
+        int totalAssists;
+        int winCount;
+        Map<String, Integer> champCount;
+        Map<String, Integer> winCountMap;
+
+        MatchStatAccumulator(int totalKills, int totalDeaths, int totalAssists, int winCount,
+                             Map<String, Integer> champCount, Map<String, Integer> winCountMap) {
+            this.totalKills = totalKills;
+            this.totalDeaths = totalDeaths;
+            this.totalAssists = totalAssists;
+            this.winCount = winCount;
+            this.champCount = champCount;
+            this.winCountMap = winCountMap;
+        }
+
+        public double getAverageKills(int totalGames) {
+            return totalGames == 0 ? 0 : (double) totalKills / totalGames;
+        }
+
+        public double getAverageDeaths(int totalGames) {
+            return totalGames == 0 ? 0 : (double) totalDeaths / totalGames;
+        }
+
+        public double getAverageAssists(int totalGames) {
+            return totalGames == 0 ? 0 : (double) totalAssists / totalGames;
+        }
+
+        public double getWinRate(int totalGames) {
+            return totalGames == 0 ? 0 : (double) winCount / totalGames * 100;
+        }
     }
 }
