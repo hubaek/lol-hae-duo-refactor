@@ -54,52 +54,11 @@ public class AccountGameDataService {
         List<String> soloMatchIds = riotClientService.getMatchIds(SOLO, account.getRegion(), account.getRiotAccountInfo().getPuuid());
         List<String> flexMatchIds = riotClientService.getMatchIds(FLEX, account.getRegion(), account.getRiotAccountInfo().getPuuid());
 
-        MatchStats quickStats = null;
-        if (!quickMatchIds.isEmpty()) {
-            quickStats = riotClientService.getMatchStats(account.getId(), quickMatchIds, QUICK, account.getSummonerName(), account.getTagLine(), account.getRegion());
-        }
+        QuickGameData quickGameData = fetchQuickMatchStats(account, quickMatchIds);
+        SoloRankData soloRankData = fetchSoloMatchStats(account, soloMatchIds, rankStats);
+        FlexRankData flexRankData = fetchFlexMatchStats(account, flexMatchIds, rankStats);
 
-        QuickGameData quickGameData;
-        if (quickStats != null) {
-            quickGameData = QuickGameData.of(
-                    quickStats.getWins(), quickStats.getTotalGames(),
-                    Kda.of(quickStats.getAverageKill(), quickStats.getAverageAssist(), quickStats.getAverageDeath())
-            );
-        } else {
-            quickGameData = QuickGameData.of(0, 0, Kda.of(0, 0, 0));
-        }
-
-        MatchStats soloStats = null;
-        SoloRankData soloRankData;
-        if (!soloMatchIds.isEmpty()) {
-            soloStats = riotClientService.getMatchStats(account.getId(), soloMatchIds, SOLO, account.getSummonerName(), account.getTagLine(), account.getRegion());
-            soloRankData = SoloRankData.of(
-                    rankStats.getSoloTier(), rankStats.getSoloRank(),
-                    soloStats.getWins(), soloStats.getTotalGames(),
-                    Kda.of(soloStats.getAverageKill(), soloStats.getAverageAssist(), soloStats.getAverageDeath())
-            );
-        } else {
-            soloRankData = SoloRankData.of("UNRANKED", "N/A", 0, 0, Kda.of(0,0,0));
-        }
-
-        MatchStats flexStats = null;
-        FlexRankData flexRankData;
-        if (!flexMatchIds.isEmpty()) {
-            flexStats = riotClientService.getMatchStats(account.getId(), flexMatchIds, FLEX, account.getSummonerName(), account.getTagLine(), account.getRegion());
-            flexRankData = FlexRankData.of(
-                    rankStats.getFlexTier(), rankStats.getFlexRank(),
-                    flexStats.getWins(), flexStats.getTotalGames(),
-                    Kda.of(flexStats.getAverageKill(), flexStats.getAverageAssist(), flexStats.getAverageDeath())
-            );
-        } else {
-            flexRankData = FlexRankData.of("UNRANKED", "N/A", 0, 0, Kda.of(0,0,0));
-        }
-
-        // 각각 데이터 객체 생성
-        // todo 
-        //  account 객체 만들때, profileIconUrl을 받을 수 있는데, 한번더 SUMMONER api를 호출해야할지 생각 해봐야함
-        //  account 객체 생성할때 accountgamedata에 profileIconUrl을 넣는건 어떨지?
-        String iconUrl = riotClientService.updateProfileIconUrl(account);
+        String iconUrl = fetchProfileIconUrl(account);
 
         AccountGameData newAccountGameData = AccountGameData.of(iconUrl, quickGameData, soloRankData, flexRankData);
         long endTime = System.currentTimeMillis();
@@ -167,6 +126,48 @@ public class AccountGameDataService {
                 flexRankDataRepository.save(flexRankData)
         );
         accountGameDataRepository.save(recentData);
+    }
+
+    private QuickGameData fetchQuickMatchStats(Account account, List<String> matchIds) {
+        if (matchIds.isEmpty()) {
+            return QuickGameData.of(0, 0, Kda.of(0, 0, 0));
+        }
+
+        MatchStats stats = riotClientService.getMatchStats(account.getId(), matchIds, QUICK, account.getSummonerName(), account.getTagLine(), account.getRegion());
+        return QuickGameData.of(
+                stats.getWins(), stats.getTotalGames(),
+                Kda.of(stats.getAverageKill(), stats.getAverageAssist(), stats.getAverageDeath())
+        );
+    }
+
+    private SoloRankData fetchSoloMatchStats(Account account, List<String> matchIds, RankStats rankStats) {
+        if (matchIds.isEmpty()) {
+            return SoloRankData.of("UNRANKED", "N/A", 0, 0, Kda.of(0,0,0));
+        }
+
+        MatchStats stats = riotClientService.getMatchStats(account.getId(), matchIds, SOLO, account.getSummonerName(), account.getTagLine(), account.getRegion());
+        return SoloRankData.of(
+                rankStats.getSoloTier(), rankStats.getSoloRank(),
+                stats.getWins(), stats.getTotalGames(),
+                Kda.of(stats.getAverageKill(), stats.getAverageAssist(), stats.getAverageDeath())
+        );
+    }
+
+    private FlexRankData fetchFlexMatchStats(Account account, List<String> matchIds, RankStats rankStats) {
+        if (matchIds.isEmpty()) {
+            return FlexRankData.of("UNRANKED", "N/A", 0, 0, Kda.of(0,0,0));
+        }
+
+        MatchStats stats = riotClientService.getMatchStats(account.getId(), matchIds, FLEX, account.getSummonerName(), account.getTagLine(), account.getRegion());
+        return FlexRankData.of(
+                rankStats.getFlexTier(), rankStats.getFlexRank(),
+                stats.getWins(), stats.getTotalGames(),
+                Kda.of(stats.getAverageKill(), stats.getAverageAssist(), stats.getAverageDeath())
+        );
+    }
+
+    private String fetchProfileIconUrl(Account account) {
+        return riotClientService.updateProfileIconUrl(account);
     }
 
     private Kda updateKda(Kda previousKda, int totalGames, MatchStats matchStats) {
