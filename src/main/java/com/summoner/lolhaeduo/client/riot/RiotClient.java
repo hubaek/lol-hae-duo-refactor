@@ -145,7 +145,7 @@ public class RiotClient {
         if (count != null) {
             urlBuilder.append("count=").append(count).append("&");
         } else {
-            urlBuilder.append("count=5&");
+            urlBuilder.append("count=20&");
         }
 
         urlBuilder.append("api_key=").append(apiKey);
@@ -201,7 +201,8 @@ public class RiotClient {
 
     @Recover
     public FormattedMatchResponse recover(RuntimeException e, String matchId, String summonerName, String tagLine, AccountRegion region) {
-        log.error("모든 재시도 요청이 실패했습니다. matchId: {}, error: {}", matchId, e.getMessage());
+        log.warn("재시도 실패: matchId={}, summoner={}, tagLine={}, region={}, 이유={}",
+                matchId, summonerName, tagLine, region, e.getMessage());
         return null;
     }
 }
