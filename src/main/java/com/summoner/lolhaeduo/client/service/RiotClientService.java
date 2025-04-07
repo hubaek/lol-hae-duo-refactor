@@ -5,6 +5,7 @@ import com.summoner.lolhaeduo.client.entity.Favorite;
 import com.summoner.lolhaeduo.client.repository.FavoriteRepository;
 import com.summoner.lolhaeduo.client.repository.VersionRepository;
 import com.summoner.lolhaeduo.client.riot.RiotClient;
+import com.summoner.lolhaeduo.common.limiter.RateLimiterManager;
 import com.summoner.lolhaeduo.common.util.TimeUtil;
 import com.summoner.lolhaeduo.domain.account.dto.LinkAccountRequest;
 import com.summoner.lolhaeduo.domain.account.entity.Account;
@@ -12,6 +13,8 @@ import com.summoner.lolhaeduo.domain.account.entity.RiotAccountInfo;
 import com.summoner.lolhaeduo.domain.account.enums.AccountRegion;
 import com.summoner.lolhaeduo.domain.account.enums.AccountServer;
 import com.summoner.lolhaeduo.domain.duo.enums.QueueType;
+import com.summoner.lolhaeduo.common.exception.RateLimitExceededException;
+import io.github.bucket4j.ConsumptionProbe;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,18 +38,34 @@ public class RiotClientService {
     private final TimeUtil timeUtil;
     private final VersionRepository versionRepository;
     private final FavoriteRepository favoriteRepository;
+    private final RateLimiterManager rateLimiterManager;
 
-    private static final int RECENT_MATCH_COUNT = 10;
+    public static final int RECENT_QUICK_MATCH_COUNT = 20;
     private static final int PERIOD_OF_RECENT_MATCH = 30;
     private static final int MAX_METHOD_CALL = 100;
 
     public RiotAccountInfo createRiotAccountInfo(LinkAccountRequest request) {
+
+        ConsumptionProbe puuidProbe = rateLimiterManager.probe();
+        if (log.isDebugEnabled()) {
+            long waitMillis = puuidProbe.getNanosToWaitForRefill() / 1_000_000;
+            String limitSource = waitMillis > 2000 ? "2분 제한 예상" : "1초 제한 예상";
+            log.debug("[RateLimit] createRiotAccountInfo - 남은 토큰: {}, 대기 시간: {}ms, 원인: {}",
+                    puuidProbe.getRemainingTokens(),
+                    waitMillis, limitSource);
+        }
+        if (!puuidProbe.isConsumed()) {
+            throw new RateLimitExceededException("Rate limit 초과 발생 ");
+        }
         PuuidResponse puuidResponse = riotClient.extractPuuid(
                 request.getSummonerName(),
                 request.getTagLine(),
                 request.getServer().getRegion()
         );
 
+        if (!rateLimiterManager.tryConsume()) {
+            throw new RateLimitExceededException("Rate limit 초과 발생 ");
+        }
         SummonerResponse summonerResponse = riotClient.extractSummonerInfo(
                 puuidResponse.getPuuid(),
                 request.getServer()
@@ -60,6 +79,9 @@ public class RiotClientService {
     }
 
     public String updateProfileIconUrl(Account account) {
+        if (!rateLimiterManager.tryConsume()) {
+            throw new RateLimitExceededException("Rate limit 초과 발생 ");
+        }
         SummonerResponse response = riotClient.extractSummonerInfo(account.getRiotAccountInfo().getPuuid(), account.getServer());
         int accountProfileIconId = response.getProfileIconId();
 
@@ -72,6 +94,9 @@ public class RiotClientService {
     }
 
     public RankStats getRankGameStats(String summonerId, AccountServer server) {
+        if (!rateLimiterManager.tryConsume()) {
+            throw new RateLimitExceededException("Rate limit 초과 발생 ");
+        }
         List<LeagueEntryResponse> leagueInfoList = riotClient.extractLeagueInfo(summonerId, server);
 
         int soloTotalGames = 0, flexTotalGames = 0;
@@ -90,8 +115,7 @@ public class RiotClientService {
                 soloTotalGames = wins + losses;
                 soloTier = leagueInfo.getTier();
                 soloRank = leagueInfo.getRank();
-            }
-            else if (leagueInfo.getQueueType().equals(FLEX.getQueueType())) {
+            } else if (leagueInfo.getQueueType().equals(FLEX.getQueueType())) {
                 flexWins = wins;
                 flexLosses = losses;
                 flexTotalGames = wins + losses;
@@ -112,19 +136,49 @@ public class RiotClientService {
         return new RankStats(soloTotalGames, flexTotalGames, soloWins, soloLosses, soloWinRate, soloTier, soloRank, flexWins, flexLosses, flexWinRate, flexTier, flexRank);
     }
 
-    public List<String> getMatchIds(QueueType queueType, AccountRegion region, String puuid) {
+    public List<String> getMatchIds(QueueType queueType, AccountRegion region, String puuid, int matchCount) {
+        ConsumptionProbe matchIdsProbe = rateLimiterManager.probe();
+        if (log.isDebugEnabled()) {
+            long waitMillis = matchIdsProbe.getNanosToWaitForRefill() / 1_000_000;
+            String limitSource = waitMillis > 2000 ? "2분 제한 예상" : "1초 제한 예상";
+            log.debug("[RateLimit] getMatchIds - 남은 토큰: {}, 대기 시간: {}ms, 원인: {}",
+                    matchIdsProbe.getRemainingTokens(), waitMillis, limitSource);
+        }
+        if (!matchIdsProbe.isConsumed()) {
+            throw new RateLimitExceededException("Rate limit 초과 발생");
+        }
 
-        if (queueType == QUICK || queueType == SOLO || queueType == FLEX) {
+        if (queueType == QUICK) {
             return riotClient.extractMatchIds(
                     null, null,
                     queueType.getQueueId(),
-                    null, 0, RECENT_MATCH_COUNT, region, puuid
+                    null, 0, RECENT_QUICK_MATCH_COUNT, region, puuid
             );
         }
-        throw new IllegalArgumentException("지원하지 않는 큐 타입입니다.");
+
+        List<String> allMatchIds = new ArrayList<>();
+        int start = 0;
+        while (start < matchCount) {
+            int count = Math.min(MAX_METHOD_CALL, matchCount - start);
+            List<String> partialMatchIds
+                    = riotClient.extractMatchIds(
+                    null, null,
+                    queueType.getQueueId(),
+                    null, start, count, region, puuid
+            );
+            if (partialMatchIds.isEmpty()) {
+                break;
+            }
+            allMatchIds.addAll(partialMatchIds);
+            start += count;
+        }
+        return allMatchIds;
     }
 
     public List<String> updateMatchIds(QueueType queueType, LocalDateTime lastUpdatedAt, AccountRegion region, String puuid) {
+        if (!rateLimiterManager.tryConsume()) {
+            throw new RateLimitExceededException("Rate limit 초과 발생 ");
+        }
         long startTime = timeUtil.convertToEpochSeconds(lastUpdatedAt);
         return riotClient.extractMatchIds(
                 startTime, null,
@@ -209,6 +263,18 @@ public class RiotClientService {
     }
 
     private FormattedMatchResponse fetchMatchData(String matchId, String summonerName, String tagLine, AccountRegion region) {
+        ConsumptionProbe matchDataProbe = rateLimiterManager.probe();
+        if (log.isDebugEnabled()) {
+            long waitMillis = matchDataProbe.getNanosToWaitForRefill() / 1_000_000;
+            String limitSource = waitMillis > 2000 ? "2분 제한 예상" : "1초 제한 예상";
+            log.debug("[RateLimit] fetchMatchData - matchId: {}, 남은 토큰: {}, 대기 시간: {}ms, 원인: {}",
+                    matchId,
+                    matchDataProbe.getRemainingTokens(),
+                    waitMillis, limitSource);
+        }
+        if (!matchDataProbe.isConsumed()) {
+            throw new RateLimitExceededException("Rate limit 초과 발생 ");
+        }
         long threadId = Thread.currentThread().getId();
         String threadName = Thread.currentThread().getName();
         long startTime = System.currentTimeMillis();
@@ -222,13 +288,14 @@ public class RiotClientService {
 
         if (matchResponse != null) {
             return new FormattedMatchResponse(
-                matchResponse.getChampionName(),
-                matchResponse.getKills(),
-                matchResponse.getDeaths(),
-                matchResponse.getAssists(),
-                matchResponse.isWin()
+                    matchResponse.getChampionName(),
+                    matchResponse.getKills(),
+                    matchResponse.getDeaths(),
+                    matchResponse.getAssists(),
+                    matchResponse.isWin()
             );
         }
+        log.warn("matchId: {} 처리 실패 - Riot API 재시도 후에도 실패했거나 유효하지 않은 매치입니다", matchId);
         return null;
     }
 
