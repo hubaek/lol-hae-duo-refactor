@@ -50,9 +50,9 @@ public class AccountGameDataService {
 
         RankStats rankStats = riotClientService.getRankGameStats(account.getRiotAccountInfo().getEncryptedSummonerId(), account.getServer());
 
-        List<String> quickMatchIds = riotClientService.getMatchIds(QUICK, account.getRegion(), account.getRiotAccountInfo().getPuuid());
-        List<String> soloMatchIds = riotClientService.getMatchIds(SOLO, account.getRegion(), account.getRiotAccountInfo().getPuuid());
-        List<String> flexMatchIds = riotClientService.getMatchIds(FLEX, account.getRegion(), account.getRiotAccountInfo().getPuuid());
+        List<String> quickMatchIds = riotClientService.getMatchIds(QUICK, account.getRegion(), account.getRiotAccountInfo().getPuuid(), RiotClientService.RECENT_QUICK_MATCH_COUNT);
+        List<String> soloMatchIds = riotClientService.getMatchIds(SOLO, account.getRegion(), account.getRiotAccountInfo().getPuuid(), rankStats.getSoloWins() + rankStats.getSoloLosses());
+        List<String> flexMatchIds = riotClientService.getMatchIds(FLEX, account.getRegion(), account.getRiotAccountInfo().getPuuid(), rankStats.getFlexWins() + rankStats.getFlexLosses());
 
         QuickGameData quickGameData = fetchQuickMatchStats(account, quickMatchIds);
         SoloRankData soloRankData = fetchSoloMatchStats(account, soloMatchIds, rankStats);
