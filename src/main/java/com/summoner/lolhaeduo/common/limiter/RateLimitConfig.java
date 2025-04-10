@@ -13,12 +13,12 @@ public class RateLimitConfig {
     @Bean
     public Bucket riotApiBucket() {
         return Bucket.builder()
-                .addLimit(
-                        Bandwidth.builder()
-                                .capacity(20)
-                                .refillGreedy(20, Duration.ofSeconds(1)) // 1초에 20개
-                                .build()
-                )
+//                .addLimit(
+//                        Bandwidth.builder()
+//                                .capacity(20)
+//                                .refillGreedy(20, Duration.ofSeconds(1)) // 1초에 20개
+//                                .build()
+//                )
                 .addLimit(
                         Bandwidth.builder()
                                 .capacity(100)
