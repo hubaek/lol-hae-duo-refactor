@@ -188,7 +188,7 @@ public class RiotClientService {
     }
 
     @Transactional
-    public MatchStats getMatchStats(Long accountId, List<String> matchIds, QueueType queueType, String summonerName, String tagLine, AccountRegion region) {
+    public MatchStats getMatchStats(Long accountId, List<String> matchIds, QueueType queueType, String summonerName, String tagLine, AccountRegion region, String puuid) {
         int totalGames = matchIds.size();
         ExecutorService executorService = Executors.newFixedThreadPool(10);
 
@@ -279,7 +279,7 @@ public class RiotClientService {
         String threadName = Thread.currentThread().getName();
         long startTime = System.currentTimeMillis();
 
-        log.info("Thread ID: {}, Name: {} is processing matchId: {}", threadId, threadName, matchId);
+//        log.info("Thread ID: {}, Name: {} is processing matchId: {}", threadId, threadName, matchId);
 
         FormattedMatchResponse matchResponse = riotClient.getMatchDetails(matchId, summonerName, tagLine, region);
 
