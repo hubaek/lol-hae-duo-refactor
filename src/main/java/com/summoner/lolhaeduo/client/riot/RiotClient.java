@@ -200,9 +200,9 @@ public class RiotClient {
     }
 
     @Recover
-    public FormattedMatchResponse recover(RuntimeException e, String matchId, String summonerName, String tagLine, AccountRegion region) {
-        log.warn("재시도 실패: matchId={}, summoner={}, tagLine={}, region={}, 이유={}",
-                matchId, summonerName, tagLine, region, e.getMessage());
+    public FormattedMatchResponse recover(RuntimeException e, String matchId, String puuid, AccountRegion region) {
+        log.warn("재시도 실패: matchId={}, puuid={}, region={}, 이유={}",
+                matchId, puuid, region, e.getMessage());
         return null;
     }
 }
