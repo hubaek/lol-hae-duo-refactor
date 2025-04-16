@@ -1,6 +1,0 @@
-language: ko
-review_rules:
-  - readability
-  - performance
-  - security
-  - best_practices
