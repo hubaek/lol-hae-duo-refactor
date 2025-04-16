@@ -188,14 +188,14 @@ public class RiotClientService {
     }
 
     @Transactional
-    public MatchStats getMatchStats(Long accountId, List<String> matchIds, QueueType queueType, String summonerName, String tagLine, AccountRegion region, String puuid) {
+    public MatchStats getMatchStats(Long accountId, List<String> matchIds, QueueType queueType, String puuid, AccountRegion region) {
         int totalGames = matchIds.size();
         ExecutorService executorService = Executors.newFixedThreadPool(10);
 
         List<Future<FormattedMatchResponse>> futures = new ArrayList<>();
 
         for (String matchId : matchIds) {
-            Callable<FormattedMatchResponse> task = () -> fetchMatchData(matchId, summonerName, tagLine, region);
+            Callable<FormattedMatchResponse> task = () -> fetchMatchData(matchId, puuid, region);
             futures.add(executorService.submit(task));
         }
 
@@ -262,7 +262,7 @@ public class RiotClientService {
         return new MatchStatAccumulator(totalKills, totalDeaths, totalAssists, winCount, champCount, winCountMap);
     }
 
-    private FormattedMatchResponse fetchMatchData(String matchId, String summonerName, String tagLine, AccountRegion region) {
+    private FormattedMatchResponse fetchMatchData(String matchId, String puuid, AccountRegion region) {
         ConsumptionProbe matchDataProbe = rateLimiterManager.probe();
         if (log.isDebugEnabled()) {
             long waitMillis = matchDataProbe.getNanosToWaitForRefill() / 1_000_000;
@@ -275,13 +275,14 @@ public class RiotClientService {
         if (!matchDataProbe.isConsumed()) {
             throw new RateLimitExceededException("Rate limit 초과 발생 ");
         }
+
         long threadId = Thread.currentThread().getId();
         String threadName = Thread.currentThread().getName();
         long startTime = System.currentTimeMillis();
 
 //        log.info("Thread ID: {}, Name: {} is processing matchId: {}", threadId, threadName, matchId);
 
-        FormattedMatchResponse matchResponse = riotClient.getMatchDetails(matchId, summonerName, tagLine, region);
+        FormattedMatchResponse matchResponse = riotClient.getMatchDetails(matchId, puuid, region);
 
         long duration = System.currentTimeMillis() - startTime;
         log.info("matchId: {} 처리 완료 ({} ms)", matchId, duration);

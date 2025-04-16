@@ -91,7 +91,7 @@ public class AccountGameDataService {
         List<String> flexMatchIds = riotClientService.updateMatchIds(FLEX, modifiedAt, account.getRegion(), account.getRiotAccountInfo().getPuuid());
 
         if (!quickMatchIds.isEmpty()) {
-            MatchStats quickStats = riotClientService.getMatchStats(account.getId(), quickMatchIds, QUICK, account.getSummonerName(), account.getTagLine(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
+            MatchStats quickStats = riotClientService.getMatchStats(account.getId(), quickMatchIds, QUICK, account.getRiotAccountInfo().getPuuid(), account.getRegion());
             quickGameData.update(
                     quickStats.getWins(), quickStats.getTotalGames(),
                     Kda.of(quickStats.getAverageKill(), quickStats.getAverageAssist(), quickStats.getAverageDeath())
@@ -99,7 +99,7 @@ public class AccountGameDataService {
         }
 
         if (!soloMatchIds.isEmpty()) {
-            MatchStats soloStats = riotClientService.getMatchStats(account.getId(), soloMatchIds, SOLO, account.getSummonerName(), account.getTagLine(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
+            MatchStats soloStats = riotClientService.getMatchStats(account.getId(), soloMatchIds, SOLO, account.getRiotAccountInfo().getPuuid(), account.getRegion());
             soloRankData.update(
                     rankStats.getSoloTier(), rankStats.getSoloRank(),
                     soloRankData.getWins() + soloStats.getWins(),
@@ -109,7 +109,7 @@ public class AccountGameDataService {
         }
 
         if (!flexMatchIds.isEmpty()) {
-            MatchStats flexStats = riotClientService.getMatchStats(account.getId(), flexMatchIds, FLEX, account.getSummonerName(), account.getTagLine(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
+            MatchStats flexStats = riotClientService.getMatchStats(account.getId(), flexMatchIds, FLEX, account.getRiotAccountInfo().getPuuid(), account.getRegion());
             flexRankData.update(
                     rankStats.getFlexTier(), rankStats.getFlexRank(),
                     flexRankData.getWins() + flexStats.getWins(),
@@ -133,7 +133,7 @@ public class AccountGameDataService {
             return QuickGameData.of(0, 0, Kda.of(0, 0, 0));
         }
 
-        MatchStats stats = riotClientService.getMatchStats(account.getId(), matchIds, QUICK, account.getSummonerName(), account.getTagLine(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
+        MatchStats stats = riotClientService.getMatchStats(account.getId(), matchIds, QUICK, account.getRiotAccountInfo().getPuuid(), account.getRegion());
         return QuickGameData.of(
                 stats.getWins(), stats.getTotalGames(),
                 Kda.of(stats.getAverageKill(), stats.getAverageAssist(), stats.getAverageDeath())
@@ -145,7 +145,7 @@ public class AccountGameDataService {
             return SoloRankData.of("UNRANKED", "N/A", 0, 0, Kda.of(0,0,0));
         }
 
-        MatchStats stats = riotClientService.getMatchStats(account.getId(), matchIds, SOLO, account.getSummonerName(), account.getTagLine(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
+        MatchStats stats = riotClientService.getMatchStats(account.getId(), matchIds, SOLO, account.getRiotAccountInfo().getPuuid(), account.getRegion());
         return SoloRankData.of(
                 rankStats.getSoloTier(), rankStats.getSoloRank(),
                 stats.getWins(), stats.getTotalGames(),
@@ -158,7 +158,7 @@ public class AccountGameDataService {
             return FlexRankData.of("UNRANKED", "N/A", 0, 0, Kda.of(0,0,0));
         }
 
-        MatchStats stats = riotClientService.getMatchStats(account.getId(), matchIds, FLEX, account.getSummonerName(), account.getTagLine(), account.getRegion(), account.getRiotAccountInfo().getPuuid());
+        MatchStats stats = riotClientService.getMatchStats(account.getId(), matchIds, FLEX, account.getRiotAccountInfo().getPuuid(), account.getRegion());
         return FlexRankData.of(
                 rankStats.getFlexTier(), rankStats.getFlexRank(),
                 stats.getWins(), stats.getTotalGames(),
