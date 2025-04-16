@@ -167,7 +167,7 @@ public class RiotClient {
             maxAttempts = 5,
             backoff = @Backoff(delay = 5000)
     )
-    public FormattedMatchResponse getMatchDetails(String matchId, String summonerName, String tagLine, AccountRegion region) {
+    public FormattedMatchResponse getMatchDetails(String matchId, String puuid, AccountRegion region) {
         String baseUrl = regionBaseUrls.getOrDefault(region.toString(), null);
         if (baseUrl == null) {
             throw new IllegalArgumentException("Invalid region specified: " + region);
@@ -184,7 +184,7 @@ public class RiotClient {
         }
 
         return matchResponse.getInfo().getParticipants().stream()
-                .filter(p -> summonerName.equals(p.getRiotIdGameName()) && tagLine.equals(p.getRiotIdTagline()))
+                .filter(p -> puuid.equals(p.getPuuid()))
                 .map(target -> new FormattedMatchResponse(
                         target.getChampionName(),
                         target.getKills(),
