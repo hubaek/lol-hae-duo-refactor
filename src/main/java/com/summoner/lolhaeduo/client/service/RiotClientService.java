@@ -15,6 +15,7 @@ import com.summoner.lolhaeduo.domain.account.enums.AccountServer;
 import com.summoner.lolhaeduo.domain.duo.enums.QueueType;
 import com.summoner.lolhaeduo.common.exception.RateLimitExceededException;
 import io.github.bucket4j.ConsumptionProbe;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,6 +40,7 @@ public class RiotClientService {
     private final VersionRepository versionRepository;
     private final FavoriteRepository favoriteRepository;
     private final RateLimiterManager rateLimiterManager;
+    private final RiotApiQueueService apiQueueService;
 
     public static final int RECENT_QUICK_MATCH_COUNT = 20;
     private static final int PERIOD_OF_RECENT_MATCH = 30;
@@ -46,36 +48,36 @@ public class RiotClientService {
 
     public RiotAccountInfo createRiotAccountInfo(LinkAccountRequest request) {
 
-        ConsumptionProbe puuidProbe = rateLimiterManager.probe();
-        if (log.isDebugEnabled()) {
-            long waitMillis = puuidProbe.getNanosToWaitForRefill() / 1_000_000;
-            String limitSource = waitMillis > 2000 ? "2분 제한 예상" : "1초 제한 예상";
-            log.debug("[RateLimit] createRiotAccountInfo - 남은 토큰: {}, 대기 시간: {}ms, 원인: {}",
-                    puuidProbe.getRemainingTokens(),
-                    waitMillis, limitSource);
-        }
-        if (!puuidProbe.isConsumed()) {
-            throw new RateLimitExceededException("Rate limit 초과 발생 ");
-        }
-        PuuidResponse puuidResponse = riotClient.extractPuuid(
-                request.getSummonerName(),
-                request.getTagLine(),
-                request.getServer().getRegion()
-        );
+        try {
+            // 1. PUUID 요청을 큐에 등록
+            Map<String, Object> puuidParams = new HashMap<>();
+            puuidParams.put("summonerName", request.getSummonerName());
+            puuidParams.put("tagLine", request.getTagLine());
+            puuidParams.put("region", request.getServer().getRegion());
 
-        if (!rateLimiterManager.tryConsume()) {
-            throw new RateLimitExceededException("Rate limit 초과 발생 ");
-        }
-        SummonerResponse summonerResponse = riotClient.extractSummonerInfo(
-                puuidResponse.getPuuid(),
-                request.getServer()
-        );
+            PuuidResponse puuidResponse = (PuuidResponse) apiQueueService.enqueueRequest(
+                    RiotApiRequest.RequestType.EXTRACT_PUUID, puuidParams).get();  // 블로킹 호출
 
-        return RiotAccountInfo.fromRiotApi(
-                puuidResponse.getPuuid(),
-                summonerResponse.getAccountId(),
-                summonerResponse.getId()
-        );
+            // 2. 소환사 정보 요청을 큐에 등록
+            Map<String, Object> summonerParams = new HashMap<>();
+            summonerParams.put("puuid", puuidResponse.getPuuid());
+            summonerParams.put("server", request.getServer());
+
+            SummonerResponse summonerResponse = (SummonerResponse) apiQueueService.enqueueRequest(
+                    RiotApiRequest.RequestType.EXTRACT_SUMMONER_INFO, summonerParams).get();  // 블로킹 호출
+
+            return RiotAccountInfo.fromRiotApi(
+                    puuidResponse.getPuuid(),
+                    summonerResponse.getAccountId(),
+                    summonerResponse.getId()
+            );
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Riot 계정 정보 생성 중 오류 발생", e);
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new RateLimitExceededException("Rate limit 초과로 인한 처리 실패");
+        }
     }
 
     public String updateProfileIconUrl(Account account) {
@@ -190,46 +192,134 @@ public class RiotClientService {
     @Transactional
     public MatchStats getMatchStats(Long accountId, List<String> matchIds, QueueType queueType, String puuid, AccountRegion region) {
         int totalGames = matchIds.size();
-        ExecutorService executorService = Executors.newFixedThreadPool(10);
-
-        List<Future<FormattedMatchResponse>> futures = new ArrayList<>();
-
+        List<CompletableFuture<FormattedMatchResponse>> futures = new ArrayList<>();
         for (String matchId : matchIds) {
-            Callable<FormattedMatchResponse> task = () -> fetchMatchData(matchId, puuid, region);
-            futures.add(executorService.submit(task));
+            Map<String, Object> params = new HashMap<>();
+            params.put("matchId", matchId);
+            params.put("puuid", puuid);
+            params.put("region", region);
+
+            futures.add(apiQueueService.enqueueRequest(
+                    RiotApiRequest.RequestType.GET_MATCH_DETAILS, params));
         }
 
-        MatchStatAccumulator accumulator = collectMatchStats(futures);
+        try {
+            // 모든 비동기 요청이 완료될 때까지 기다림
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
 
-        executorService.shutdown();
+            // 결과 처리
+            MatchStatAccumulator accumulator = new MatchStatAccumulator(0, 0, 0, 0, new HashMap<>(), new HashMap<>());
 
-        double winRate = 0;
-        if (queueType == QUICK) {
-            winRate = accumulator.getWinRate(totalGames);
-        }
-        double averageKill = accumulator.getAverageKills(totalGames);
-        double averageDeath = accumulator.getAverageDeaths(totalGames);
-        double averageAssist = accumulator.getAverageAssists(totalGames);
+            for (CompletableFuture<FormattedMatchResponse> future : futures) {
+                try {
+                    FormattedMatchResponse result = future.get();
+                    if (result != null) {
+                        // 챔피언 카운트 업데이트
+                        accumulator.getChampCount().put(
+                                result.getChampionName(),
+                                accumulator.getChampCount().getOrDefault(result.getChampionName(), 0) + 1);
 
-        for (Map.Entry<String, Integer> entry : accumulator.getChampCount().entrySet()) {
-            String championName = entry.getKey();
-            int playCount = entry.getValue();
-            int championWinCount = accumulator.getWinCountMap().getOrDefault(championName, 0);
+                        // KDA 업데이트
+                        accumulator.updateTotalKills(accumulator.getTotalKills() + result.getKills());
+                        accumulator.updateTotalDeaths(accumulator.getTotalDeaths() + result.getDeaths());
+                        accumulator.updateTotalAssists(accumulator.getTotalAssists() + result.getAssists());
 
-            Favorite existingFavorite = favoriteRepository.findByAccountIdAndQueueTypeAndChampionName(accountId, queueType, championName);
-
-            if (existingFavorite != null) {
-                existingFavorite.update(playCount, championWinCount);
-            } else {
-                Favorite newFavorite = new Favorite(accountId, queueType, championName, playCount, championWinCount);
-                favoriteRepository.save(newFavorite);
+                        // 승리 카운트 및 챔피언별 승리 카운트 업데이트
+                        if (result.isWin()) {
+                            accumulator.updateWinCount(accumulator.getWinCount() + 1);
+                            accumulator.getWinCountMap().put(
+                                    result.getChampionName(),
+                                    accumulator.getWinCountMap().getOrDefault(result.getChampionName(), 0) + 1);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("매치 결과 처리 중 오류", e);
+                }
             }
+
+            // Favorite 엔티티 처리
+            for (Map.Entry<String, Integer> entry : accumulator.getChampCount().entrySet()) {
+                String championName = entry.getKey();
+                int playCount = entry.getValue();
+                int championWinCount = accumulator.getWinCountMap().getOrDefault(championName, 0);
+
+                Favorite existingFavorite = favoriteRepository.findByAccountIdAndQueueTypeAndChampionName(
+                        accountId, queueType, championName);
+
+                if (existingFavorite != null) {
+                    existingFavorite.update(playCount, championWinCount);
+                } else {
+                    Favorite newFavorite = new Favorite(
+                            accountId, queueType, championName, playCount, championWinCount);
+                    favoriteRepository.save(newFavorite);
+                }
+            }
+
+            // 통계 계산
+            double winRate = queueType == QUICK ? accumulator.getWinRate(totalGames) : 0;
+            double averageKill = accumulator.getAverageKills(totalGames);
+            double averageDeath = accumulator.getAverageDeaths(totalGames);
+            double averageAssist = accumulator.getAverageAssists(totalGames);
+
+            return new MatchStats(
+                    accumulator.getWinCount(),
+                    totalGames - accumulator.getWinCount(),
+                    totalGames,
+                    queueType,
+                    winRate,
+                    averageKill,
+                    averageDeath,
+                    averageAssist
+            );
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("매치 통계 처리 중 오류", e);
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new RuntimeException("매치 통계 처리 실패", e);
         }
 
-        return new MatchStats(
-                accumulator.getWinCount(), totalGames - accumulator.getWinCount(), totalGames, queueType,
-                winRate, averageKill, averageDeath, averageAssist
-        );
+
+//        ExecutorService executorService = Executors.newFixedThreadPool(10);
+//
+//        List<Future<FormattedMatchResponse>> futures = new ArrayList<>();
+//
+//        for (String matchId : matchIds) {
+//            Callable<FormattedMatchResponse> task = () -> fetchMatchData(matchId, puuid, region);
+//            futures.add(executorService.submit(task));
+//        }
+//
+//        MatchStatAccumulator accumulator = collectMatchStats(futures);
+//
+//        executorService.shutdown();
+//
+//        double winRate = 0;
+//        if (queueType == QUICK) {
+//            winRate = accumulator.getWinRate(totalGames);
+//        }
+//        double averageKill = accumulator.getAverageKills(totalGames);
+//        double averageDeath = accumulator.getAverageDeaths(totalGames);
+//        double averageAssist = accumulator.getAverageAssists(totalGames);
+//
+//        for (Map.Entry<String, Integer> entry : accumulator.getChampCount().entrySet()) {
+//            String championName = entry.getKey();
+//            int playCount = entry.getValue();
+//            int championWinCount = accumulator.getWinCountMap().getOrDefault(championName, 0);
+//
+//            Favorite existingFavorite = favoriteRepository.findByAccountIdAndQueueTypeAndChampionName(accountId, queueType, championName);
+//
+//            if (existingFavorite != null) {
+//                existingFavorite.update(playCount, championWinCount);
+//            } else {
+//                Favorite newFavorite = new Favorite(accountId, queueType, championName, playCount, championWinCount);
+//                favoriteRepository.save(newFavorite);
+//            }
+//        }
+//
+//        return new MatchStats(
+//                accumulator.getWinCount(), totalGames - accumulator.getWinCount(), totalGames, queueType,
+//                winRate, averageKill, averageDeath, averageAssist
+//        );
     }
 
     private MatchStatAccumulator collectMatchStats(List<Future<FormattedMatchResponse>> futures) {
@@ -300,11 +390,13 @@ public class RiotClientService {
         return null;
     }
 
+    @Getter
     private static class MatchStatAccumulator {
-        private final int totalKills;
-        private final int totalDeaths;
-        private final int totalAssists;
-        private final int winCount;
+
+        private int totalKills;
+        private int totalDeaths;
+        private int totalAssists;
+        private int winCount;
         private final Map<String, Integer> champCount;
         private final Map<String, Integer> winCountMap;
 
@@ -316,18 +408,6 @@ public class RiotClientService {
             this.winCount = winCount;
             this.champCount = champCount;
             this.winCountMap = winCountMap;
-        }
-
-        public int getWinCount() {
-            return winCount;
-        }
-
-        public Map<String, Integer> getChampCount() {
-            return champCount;
-        }
-
-        public Map<String, Integer> getWinCountMap() {
-            return winCountMap;
         }
 
         public double getAverageKills(int totalGames) {
@@ -344,6 +424,22 @@ public class RiotClientService {
 
         public double getWinRate(int totalGames) {
             return totalGames == 0 ? 0 : (double) winCount / totalGames * 100;
+        }
+
+        public void updateTotalKills(int totalKills) {
+            this.totalKills = totalKills;
+        }
+
+        public void updateTotalDeaths(int totalDeaths) {
+            this.totalDeaths = totalDeaths;
+        }
+
+        public void updateTotalAssists(int totalAssists) {
+            this.totalAssists = totalAssists;
+        }
+
+        public void updateWinCount(int winCount) {
+            this.winCount = winCount;
         }
     }
 }
