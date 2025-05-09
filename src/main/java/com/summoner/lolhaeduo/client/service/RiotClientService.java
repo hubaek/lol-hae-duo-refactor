@@ -278,48 +278,6 @@ public class RiotClientService {
             }
             throw new RuntimeException("매치 통계 처리 실패", e);
         }
-
-
-//        ExecutorService executorService = Executors.newFixedThreadPool(10);
-//
-//        List<Future<FormattedMatchResponse>> futures = new ArrayList<>();
-//
-//        for (String matchId : matchIds) {
-//            Callable<FormattedMatchResponse> task = () -> fetchMatchData(matchId, puuid, region);
-//            futures.add(executorService.submit(task));
-//        }
-//
-//        MatchStatAccumulator accumulator = collectMatchStats(futures);
-//
-//        executorService.shutdown();
-//
-//        double winRate = 0;
-//        if (queueType == QUICK) {
-//            winRate = accumulator.getWinRate(totalGames);
-//        }
-//        double averageKill = accumulator.getAverageKills(totalGames);
-//        double averageDeath = accumulator.getAverageDeaths(totalGames);
-//        double averageAssist = accumulator.getAverageAssists(totalGames);
-//
-//        for (Map.Entry<String, Integer> entry : accumulator.getChampCount().entrySet()) {
-//            String championName = entry.getKey();
-//            int playCount = entry.getValue();
-//            int championWinCount = accumulator.getWinCountMap().getOrDefault(championName, 0);
-//
-//            Favorite existingFavorite = favoriteRepository.findByAccountIdAndQueueTypeAndChampionName(accountId, queueType, championName);
-//
-//            if (existingFavorite != null) {
-//                existingFavorite.update(playCount, championWinCount);
-//            } else {
-//                Favorite newFavorite = new Favorite(accountId, queueType, championName, playCount, championWinCount);
-//                favoriteRepository.save(newFavorite);
-//            }
-//        }
-//
-//        return new MatchStats(
-//                accumulator.getWinCount(), totalGames - accumulator.getWinCount(), totalGames, queueType,
-//                winRate, averageKill, averageDeath, averageAssist
-//        );
     }
 
     private MatchStatAccumulator collectMatchStats(List<Future<FormattedMatchResponse>> futures) {
