@@ -220,13 +220,13 @@ public class RiotClientService {
                                 accumulator.getChampCount().getOrDefault(result.getChampionName(), 0) + 1);
 
                         // KDA 업데이트
-                        accumulator.updateTotalKills(accumulator.getTotalKills() + result.getKills());
-                        accumulator.updateTotalDeaths(accumulator.getTotalDeaths() + result.getDeaths());
-                        accumulator.updateTotalAssists(accumulator.getTotalAssists() + result.getAssists());
+                        accumulator.addTotalKills(result.getKills());
+                        accumulator.addTotalDeaths(result.getDeaths());
+                        accumulator.addTotalAssists(result.getAssists());
 
                         // 승리 카운트 및 챔피언별 승리 카운트 업데이트
                         if (result.isWin()) {
-                            accumulator.updateWinCount(accumulator.getWinCount() + 1);
+                            accumulator.incrementWinCount();
                             accumulator.getWinCountMap().put(
                                     result.getChampionName(),
                                     accumulator.getWinCountMap().getOrDefault(result.getChampionName(), 0) + 1);
@@ -426,20 +426,20 @@ public class RiotClientService {
             return totalGames == 0 ? 0 : (double) winCount / totalGames * 100;
         }
 
-        public void updateTotalKills(int totalKills) {
-            this.totalKills = totalKills;
+        public void addTotalKills(int kills) {
+            this.totalKills = kills;
         }
 
-        public void updateTotalDeaths(int totalDeaths) {
-            this.totalDeaths = totalDeaths;
+        public void addTotalDeaths(int deaths) {
+            this.totalDeaths = deaths;
         }
 
-        public void updateTotalAssists(int totalAssists) {
-            this.totalAssists = totalAssists;
+        public void addTotalAssists(int assists) {
+            this.totalAssists = assists;
         }
 
-        public void updateWinCount(int winCount) {
-            this.winCount = winCount;
+        public void incrementWinCount() {
+            this.winCount++;
         }
     }
 }
