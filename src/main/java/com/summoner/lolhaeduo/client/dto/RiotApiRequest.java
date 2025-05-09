@@ -9,14 +9,14 @@ import java.util.concurrent.CompletableFuture;
 
 @Data
 @Builder
-public class RiotApiRequest {
+public class RiotApiRequest<T> {
     private String requestId;
     private RequestType requestType;
     private Map<String, Object> parameters;
     private int retryCount;
     private LocalDateTime createdAt;
     private LocalDateTime nextAttemptTime;
-    private CompletableFuture<Object> resultFuture;
+    private CompletableFuture<T> resultFuture;
 
     public enum RequestType {
         EXTRACT_PUUID,
