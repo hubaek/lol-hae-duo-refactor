@@ -5,6 +5,7 @@ import com.summoner.lolhaeduo.client.entity.Favorite;
 import com.summoner.lolhaeduo.client.repository.FavoriteRepository;
 import com.summoner.lolhaeduo.client.repository.VersionRepository;
 import com.summoner.lolhaeduo.client.riot.RiotClient;
+import com.summoner.lolhaeduo.common.exception.riot.*;
 import com.summoner.lolhaeduo.common.limiter.RateLimiterManager;
 import com.summoner.lolhaeduo.common.util.TimeUtil;
 import com.summoner.lolhaeduo.domain.account.dto.LinkAccountRequest;
@@ -13,7 +14,6 @@ import com.summoner.lolhaeduo.domain.account.entity.RiotAccountInfo;
 import com.summoner.lolhaeduo.domain.account.enums.AccountRegion;
 import com.summoner.lolhaeduo.domain.account.enums.AccountServer;
 import com.summoner.lolhaeduo.domain.duo.enums.QueueType;
-import com.summoner.lolhaeduo.common.exception.RateLimitExceededException;
 import io.github.bucket4j.ConsumptionProbe;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,6 +59,11 @@ public class RiotClientService {
             PuuidResponse puuidResponse = (PuuidResponse) apiQueueService.enqueueRequest(
                     RiotApiRequest.RequestType.EXTRACT_PUUID, puuidParams).get();  // 블로킹 호출
 
+            if (puuidResponse == null || puuidResponse.getPuuid() == null) {
+                throw new RiotApiSummonerNotFoundException("소환사 정보를 찾을 수 없습니다: %s$%s",
+                        request.getSummonerName(), request.getTagLine());
+            }
+
             // 2. 소환사 정보 요청을 큐에 등록
             Map<String, Object> summonerParams = new HashMap<>();
             summonerParams.put("puuid", puuidResponse.getPuuid());
@@ -66,23 +72,29 @@ public class RiotClientService {
             SummonerResponse summonerResponse = (SummonerResponse) apiQueueService.enqueueRequest(
                     RiotApiRequest.RequestType.EXTRACT_SUMMONER_INFO, summonerParams).get();  // 블로킹 호출
 
+            if (summonerResponse == null || summonerResponse.getId() == null) {
+                throw new RiotApiSummonerNotFoundException("PUUID에 해당하는 소환사 정보를 찾을 수 없습니다." + puuidResponse.getPuuid(), request.getSummonerName(), request.getTagLine());
+            }
+
             return RiotAccountInfo.fromRiotApi(
                     puuidResponse.getPuuid(),
                     summonerResponse.getAccountId(),
                     summonerResponse.getId()
             );
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (InterruptedException e) {
+            log.error("Riot 계정 정보 생성 중 스레드 중단", e);
+            Thread.currentThread().interrupt();
+            throw new RiotApiInterruptedException("소환사 정보 조회 중 작업이 중단되었습니다.", e);
+        } catch (ExecutionException e) {
             log.error("Riot 계정 정보 생성 중 오류 발생", e);
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            throw new RateLimitExceededException("Rate limit 초과로 인한 처리 실패");
+            Throwable cause = e.getCause();
+            throw new RiotApiException("소환사 정보 조회 중 오류 발생", cause);
         }
     }
 
     public String updateProfileIconUrl(Account account) {
         if (!rateLimiterManager.tryConsume()) {
-            throw new RateLimitExceededException("Rate limit 초과 발생 ");
+            throw new InternalRateLimitException("Rate limit 초과 발생 ");
         }
         SummonerResponse response = riotClient.extractSummonerInfo(account.getRiotAccountInfo().getPuuid(), account.getServer());
         int accountProfileIconId = response.getProfileIconId();
@@ -97,7 +109,7 @@ public class RiotClientService {
 
     public RankStats getRankGameStats(String summonerId, AccountServer server) {
         if (!rateLimiterManager.tryConsume()) {
-            throw new RateLimitExceededException("Rate limit 초과 발생 ");
+            throw new InternalRateLimitException("Rate limit 초과 발생 ");
         }
         List<LeagueEntryResponse> leagueInfoList = riotClient.extractLeagueInfo(summonerId, server);
 
@@ -147,7 +159,7 @@ public class RiotClientService {
                     matchIdsProbe.getRemainingTokens(), waitMillis, limitSource);
         }
         if (!matchIdsProbe.isConsumed()) {
-            throw new RateLimitExceededException("Rate limit 초과 발생");
+            throw new InternalRateLimitException("Rate limit 초과 발생");
         }
 
         if (queueType == QUICK) {
@@ -179,7 +191,7 @@ public class RiotClientService {
 
     public List<String> updateMatchIds(QueueType queueType, LocalDateTime lastUpdatedAt, AccountRegion region, String puuid) {
         if (!rateLimiterManager.tryConsume()) {
-            throw new RateLimitExceededException("Rate limit 초과 발생 ");
+            throw new InternalRateLimitException("Rate limit 초과 발생 ");
         }
         long startTime = timeUtil.convertToEpochSeconds(lastUpdatedAt);
         return riotClient.extractMatchIds(
@@ -202,17 +214,29 @@ public class RiotClientService {
             // 3. 결과 처리
             MatchResultProcessingResult result = processMatchResults(futures);
 
+            if (!result.getFailedMatchIds().isEmpty()) {
+                log.warn("일부 매치 데이터를 가져오지 못했습니다. 실패한 매치 ID: {}", result.getFailedMatchIds());
+            }
+
             // 4. Favorite 엔티티 업데이트
             updateFavoriteEntities(accountId, queueType, result.getAccumulator());
 
             // 5. 통계 계산 및 반환
             return calculateMatchStats(queueType, totalGames, result.getAccumulator());
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("매치 통계 처리 중 오류", e);
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
+        } catch (InterruptedException e) {
+            log.error("매치 통계 처리 중 스레드 중단", e);
+            Thread.currentThread().interrupt();
+            throw new RiotApiInterruptedException("매치 데이터 처리 중 작업이 중단되었습니다", e);
+        } catch (ExecutionException e) {
+            log.error("매치 통계 처리 중 오류 발생", e);
+            Throwable cause = e.getCause();
+            if (cause instanceof InternalRateLimitException) {
+                throw new RiotApiRateLimitException("Riot API 레이트 리밋 초과", cause);
             }
-            throw new RuntimeException("매치 통계 처리 실패", e);
+            if (cause instanceof IOException) {
+                throw new RiotApiException("Riot API 통신 오류", cause);
+            }
+            throw new RiotApiException("매치 데이터 처리 중 오류 발생", e);
         }
     }
 
@@ -257,10 +281,18 @@ public class RiotClientService {
                                 result.getChampionName(),
                                 accumulator.getWinCountMap().getOrDefault(result.getChampionName(), 0) + 1);
                     }
+                } else {
+                    // null 결과는 실패로 간주
+                    failedMatchIds.add(future.toString());
+                    log.warn("매치 결과가 null입니다. 매치 ID: {}", future.toString());
                 }
-            } catch (Exception e) {
+            } catch (InterruptedException e) {
+                failedMatchIds.add("InterruptedException: " + future.toString());
+                log.error("매치 결과 처리 중 스레드 중단", e);
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException e) {
+                failedMatchIds.add("Failed to get match result: " + future.toString());
                 log.error("매치 결과 처리 중 오류", e);
-                failedMatchIds.add(e.getMessage());
             }
         }
         return new MatchResultProcessingResult(accumulator, failedMatchIds);
@@ -304,17 +336,20 @@ public class RiotClientService {
                 averageAssist
         );
     }
+
     @Getter
     private static class MatchResultProcessingResult {
 
         private final MatchStatAccumulator accumulator;
         private final List<String> failedMatchIds;
+
         public MatchResultProcessingResult(MatchStatAccumulator accumulator, List<String> failedMatchIds) {
             this.accumulator = accumulator;
             this.failedMatchIds = failedMatchIds;
         }
 
     }
+
     @Getter
     private static class MatchStatAccumulator {
 
