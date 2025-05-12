@@ -1,4 +1,4 @@
-package com.summoner.lolhaeduo.common.exception;
+package com.summoner.lolhaeduo.common.exception.riot;
 
 
 public class RateLimitExceededException extends RuntimeException {
