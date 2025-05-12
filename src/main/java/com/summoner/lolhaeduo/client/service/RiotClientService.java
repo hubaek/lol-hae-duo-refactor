@@ -230,6 +230,7 @@ public class RiotClientService {
         }
         return futures;
     }
+
     // 3. 결과 처리 메서드
     private static MatchResultProcessingResult processMatchResults(List<CompletableFuture<FormattedMatchResponse>> futures) {
         MatchStatAccumulator accumulator = new MatchStatAccumulator(0, 0, 0, 0, new HashMap<>(), new HashMap<>());
@@ -264,8 +265,8 @@ public class RiotClientService {
         }
         return new MatchResultProcessingResult(accumulator, failedMatchIds);
     }
-    // 4. Favorite 엔티티 업데이트 메서드
 
+    // 4. Favorite 엔티티 업데이트 메서드
     private void updateFavoriteEntities(Long accountId, QueueType queueType, MatchStatAccumulator accumulator) {
         for (Map.Entry<String, Integer> entry : accumulator.getChampCount().entrySet()) {
             String championName = entry.getKey();
@@ -284,8 +285,8 @@ public class RiotClientService {
             }
         }
     }
-    // 5. 통계 계산 메서드
 
+    // 5. 통계 계산 메서드
     private static MatchStats calculateMatchStats(QueueType queueType, int totalGames, MatchStatAccumulator accumulator) {
         double winRate = queueType == QUICK ? accumulator.getWinRate(totalGames) : 0;
         double averageKill = accumulator.getAverageKills(totalGames);
@@ -367,70 +368,5 @@ public class RiotClientService {
         }
 
     }
-    private MatchStatAccumulator collectMatchStats(List<Future<FormattedMatchResponse>> futures) {
-        int totalKills = 0, totalDeaths = 0, totalAssists = 0, winCount = 0;
-        Map<String, Integer> champCount = new HashMap<>();
-        Map<String, Integer> winCountMap = new HashMap<>();
 
-        for (Future<FormattedMatchResponse> future : futures) {
-            try {
-                FormattedMatchResponse result = future.get();
-                if (result != null) {
-                    champCount.put(result.getChampionName(), champCount.getOrDefault(result.getChampionName(), 0) + 1);
-                    totalKills += result.getKills();
-                    totalDeaths += result.getDeaths();
-                    totalAssists += result.getAssists();
-
-                    if (result.isWin()) {
-                        winCount++;
-                        winCountMap.put(result.getChampionName(), winCountMap.getOrDefault(result.getChampionName(), 0) + 1);
-                    }
-                }
-            } catch (InterruptedException | ExecutionException e) {
-                log.error("current error: {}", e.getMessage());
-                if (e instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-        }
-
-        return new MatchStatAccumulator(totalKills, totalDeaths, totalAssists, winCount, champCount, winCountMap);
-    }
-    private FormattedMatchResponse fetchMatchData(String matchId, String puuid, AccountRegion region) {
-        ConsumptionProbe matchDataProbe = rateLimiterManager.probe();
-        if (log.isDebugEnabled()) {
-            long waitMillis = matchDataProbe.getNanosToWaitForRefill() / 1_000_000;
-            String limitSource = waitMillis > 2000 ? "2분 제한 예상" : "1초 제한 예상";
-            log.debug("[RateLimit] fetchMatchData - matchId: {}, 남은 토큰: {}, 대기 시간: {}ms, 원인: {}",
-                    matchId,
-                    matchDataProbe.getRemainingTokens(),
-                    waitMillis, limitSource);
-        }
-        if (!matchDataProbe.isConsumed()) {
-            throw new RateLimitExceededException("Rate limit 초과 발생 ");
-        }
-
-        long threadId = Thread.currentThread().getId();
-        String threadName = Thread.currentThread().getName();
-        long startTime = System.currentTimeMillis();
-
-//        log.info("Thread ID: {}, Name: {} is processing matchId: {}", threadId, threadName, matchId);
-
-        FormattedMatchResponse matchResponse = riotClient.getMatchDetails(matchId, puuid, region);
-
-        long duration = System.currentTimeMillis() - startTime;
-        log.info("matchId: {} 처리 완료 ({} ms)", matchId, duration);
-
-        if (matchResponse != null) {
-            return new FormattedMatchResponse(
-                    matchResponse.getChampionName(),
-                    matchResponse.getKills(),
-                    matchResponse.getDeaths(),
-                    matchResponse.getAssists(),
-                    matchResponse.isWin()
-            );
-        }
-        log.warn("matchId: {} 처리 실패 - Riot API 재시도 후에도 실패했거나 유효하지 않은 매치입니다", matchId);
-        return null;
-    }
 }
