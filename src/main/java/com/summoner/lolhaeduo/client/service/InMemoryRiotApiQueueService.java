@@ -136,6 +136,9 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
                 case GET_MATCH_DETAILS:
                     result = executeMatchDetailsRequest(request);
                     break;
+                default:
+                    log.error("지원하지 않는 요청 유형: {}", request.getRequestType());
+                    throw new IllegalArgumentException("지원하지 않는 요청 타입: " + request.getRequestType());
             }
 
             request.getResultFuture().complete(result);
