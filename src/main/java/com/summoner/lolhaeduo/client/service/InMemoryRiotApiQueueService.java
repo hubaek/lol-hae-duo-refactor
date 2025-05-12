@@ -31,12 +31,17 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
     private final RateLimiterManager rateLimiterManager;
 
     private final BlockingQueue<RiotApiRequest> requestQueue = new LinkedBlockingQueue<>();
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    // 스케줄러는 토큰 소비와 작업 디스패치만 담당
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
+    // 실제 API 호출은 별도 스레드 풀에서 처리
+    private final ExecutorService apiExecutor = Executors.newCachedThreadPool();
+
     private final AtomicBoolean isProcessing = new AtomicBoolean(false);
 
     @PostConstruct
     public void init() {
-        // 큐 처리 스케줄러 시작 (100ms마다)
+        // 큐 처리 스케줄러 시작 (2000ms마다)
         scheduler.scheduleAtFixedRate(this::processQueue, 0, 2000, TimeUnit.MILLISECONDS);
         log.info("메모리 기반 Riot API Queue Service 초기화 완료");
     }
@@ -44,6 +49,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
     @PreDestroy
     public void shutdown() {
         scheduler.shutdown();
+        apiExecutor.shutdown();
         log.info("메모리 기반 Riot API Queue Service 종료");
     }
 
@@ -87,7 +93,8 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
                     if (probe.isConsumed()) {
                         // 레이트 리밋 허용, 큐에서 제거
                         requestQueue.poll();
-                        executeRequest(request);
+                        // 별도 스레드 풀에 작업 제출
+                        apiExecutor.submit(() -> executeRequest(request));
                     } else {
                         // 다음 시도 시간 계산
                         long waitTimeMillis = probe.getNanosToWaitForRefill() / 1_000_000;
