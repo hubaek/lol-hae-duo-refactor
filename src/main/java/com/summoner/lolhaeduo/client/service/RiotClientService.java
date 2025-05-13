@@ -387,15 +387,15 @@ public class RiotClientService {
         }
 
         public void addTotalKills(int kills) {
-            this.totalKills = kills;
+            this.totalKills += kills;
         }
 
         public void addTotalDeaths(int deaths) {
-            this.totalDeaths = deaths;
+            this.totalDeaths += deaths;
         }
 
         public void addTotalAssists(int assists) {
-            this.totalAssists = assists;
+            this.totalAssists += assists;
         }
 
         public void incrementWinCount() {
