@@ -56,7 +56,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
 
     @Override
     public <T> CompletableFuture<T> enqueueRequest(RiotApiRequest.RequestType requestType, Map<String, Object> parameters) {
-        RiotApiRequest<Object> request = RiotApiRequest.builder()
+        RiotApiRequest<T> request = RiotApiRequest.<T>builder()
                 .requestId(UUID.randomUUID().toString())
                 .requestType(requestType)
                 .parameters(parameters)
@@ -69,7 +69,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
         requestQueue.add(request);
         log.info("요청이 큐에 추가됨: {}, 유형: {}", request.getRequestId(), requestType);
 
-        return (CompletableFuture<T>) request.getResultFuture();
+        return request.getResultFuture();
     }
 
     private void processQueue() {
