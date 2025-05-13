@@ -120,11 +120,11 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
             log.debug("요청 {} 실행 시작, 유형: {}", request.getRequestId(), request.getRequestType());
 
             T result = switch (request.getRequestType()) {
-                case EXTRACT_PUUID -> (T) executePuuidRequest(request);
-                case EXTRACT_SUMMONER_INFO -> (T) executeSummonerInfoRequest(request);
-                case EXTRACT_LEAGUE_INFO -> (T) executeLeagueInfoRequest(request);
-                case EXTRACT_MATCH_IDS -> (T) executeMatchIdsRequest(request);
-                case GET_MATCH_DETAILS -> (T) executeMatchDetailsRequest(request);
+                case EXTRACT_PUUID -> (T) executePuuidRequest((RiotApiRequest<PuuidResponse>) request);
+                case EXTRACT_SUMMONER_INFO -> (T) executeSummonerInfoRequest((RiotApiRequest<SummonerResponse>) request);
+                case EXTRACT_LEAGUE_INFO -> (T) executeLeagueInfoRequest((RiotApiRequest<List<LeagueEntryResponse>>) request);
+                case EXTRACT_MATCH_IDS -> (T) executeMatchIdsRequest((RiotApiRequest<List<String>>) request);
+                case GET_MATCH_DETAILS -> (T) executeMatchDetailsRequest((RiotApiRequest<FormattedMatchResponse>) request);
                 default -> {
                     log.error("지원하지 않는 요청 유형: {}", request.getRequestType());
                     throw new IllegalArgumentException("지원하지 않는 요청 타입: " + request.getRequestType());
@@ -154,7 +154,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
 
 
     // 각 요청 유형별 실행 메서드
-    private PuuidResponse executePuuidRequest(RiotApiRequest request) {
+    private PuuidResponse executePuuidRequest(RiotApiRequest<PuuidResponse> request) {
         String summonerName = (String) request.getParameters().get("summonerName");
         String tagLine = (String) request.getParameters().get("tagLine");
         AccountRegion region = (AccountRegion) request.getParameters().get("region");
@@ -165,7 +165,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
         return riotClient.extractPuuid(summonerName, tagLine, region);
     }
 
-    private SummonerResponse executeSummonerInfoRequest(RiotApiRequest request) {
+    private SummonerResponse executeSummonerInfoRequest(RiotApiRequest<SummonerResponse> request) {
         String puuid = (String) request.getParameters().get("puuid");
         AccountServer server = (AccountServer) request.getParameters().get("server");
 
@@ -173,7 +173,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
 
         return riotClient.extractSummonerInfo(puuid, server);
     }
-    private List<LeagueEntryResponse> executeLeagueInfoRequest(RiotApiRequest request) {
+    private List<LeagueEntryResponse> executeLeagueInfoRequest(RiotApiRequest<List<LeagueEntryResponse>> request) {
         String summonerId = (String) request.getParameters().get("summonerId");
         AccountServer server = (AccountServer) request.getParameters().get("server");
 
@@ -183,7 +183,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
     }
 
     @SuppressWarnings("unchecked")
-    private List<String> executeMatchIdsRequest(RiotApiRequest request) {
+    private List<String> executeMatchIdsRequest(RiotApiRequest<List<String>> request) {
         Long startTime = (Long) request.getParameters().get("startTime");
         Long endTime = (Long) request.getParameters().get("endTime");
         Integer queue = (Integer) request.getParameters().get("queue");
@@ -197,7 +197,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
         return riotClient.extractMatchIds(startTime, endTime, queue, type, start, count, region, puuid);
     }
 
-    private FormattedMatchResponse executeMatchDetailsRequest(RiotApiRequest request) {
+    private FormattedMatchResponse executeMatchDetailsRequest(RiotApiRequest<FormattedMatchResponse> request) {
         String matchId = (String) request.getParameters().get("matchId");
         String puuid = (String) request.getParameters().get("puuid");
         AccountRegion region = (AccountRegion) request.getParameters().get("region");
