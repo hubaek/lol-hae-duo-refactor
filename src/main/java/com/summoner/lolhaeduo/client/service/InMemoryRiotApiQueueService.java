@@ -30,7 +30,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
     private final RiotClient riotClient;
     private final RateLimiterManager rateLimiterManager;
 
-    private final BlockingQueue<RiotApiRequest> requestQueue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<RiotApiRequest<?>> requestQueue = new LinkedBlockingQueue<>();
     // 스케줄러는 토큰 소비와 작업 디스패치만 담당
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
@@ -56,7 +56,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
 
     @Override
     public <T> CompletableFuture<T> enqueueRequest(RiotApiRequest.RequestType requestType, Map<String, Object> parameters) {
-        RiotApiRequest request = RiotApiRequest.builder()
+        RiotApiRequest<Object> request = RiotApiRequest.builder()
                 .requestId(UUID.randomUUID().toString())
                 .requestType(requestType)
                 .parameters(parameters)
@@ -78,7 +78,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
                 log.debug("큐 처리 시작, 현재 큐 크기: {}", requestQueue.size());
 
                 while (!requestQueue.isEmpty()) {
-                    RiotApiRequest request = requestQueue.peek();
+                    RiotApiRequest<?> request = requestQueue.peek();
 
                     // 아직 처리 시간이 되지 않은 요청은 건너뜀
                     if (request.getNextAttemptTime().isAfter(LocalDateTime.now())) {
@@ -113,33 +113,23 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
         }
     }
 
-    private void executeRequest(RiotApiRequest request) {
+    @SuppressWarnings("unchecked")
+    private <T> void executeRequest(RiotApiRequest<T> request) {
         try {
             long startTime = System.currentTimeMillis();
             log.debug("요청 {} 실행 시작, 유형: {}", request.getRequestId(), request.getRequestType());
 
-            Object result = null;
-
-            switch (request.getRequestType()) {
-                case EXTRACT_PUUID:
-                    result = executePuuidRequest(request);
-                    break;
-                case EXTRACT_SUMMONER_INFO:
-                    result = executeSummonerInfoRequest(request);
-                    break;
-                case EXTRACT_LEAGUE_INFO:
-                    result = executeLeagueInfoRequest(request);
-                    break;
-                case EXTRACT_MATCH_IDS:
-                    result = executeMatchIdsRequest(request);
-                    break;
-                case GET_MATCH_DETAILS:
-                    result = executeMatchDetailsRequest(request);
-                    break;
-                default:
+            T result = switch (request.getRequestType()) {
+                case EXTRACT_PUUID -> (T) executePuuidRequest((RiotApiRequest<?>) request);
+                case EXTRACT_SUMMONER_INFO -> (T) executeSummonerInfoRequest((RiotApiRequest<?>) request);
+                case EXTRACT_LEAGUE_INFO -> (T) executeLeagueInfoRequest((RiotApiRequest<?>) request);
+                case EXTRACT_MATCH_IDS -> (T) executeMatchIdsRequest((RiotApiRequest<?>) request);
+                case GET_MATCH_DETAILS -> (T) executeMatchDetailsRequest((RiotApiRequest<?>) request);
+                default -> {
                     log.error("지원하지 않는 요청 유형: {}", request.getRequestType());
                     throw new IllegalArgumentException("지원하지 않는 요청 타입: " + request.getRequestType());
-            }
+                }
+            };
 
             request.getResultFuture().complete(result);
             long duration = System.currentTimeMillis() - startTime;
