@@ -120,11 +120,11 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
             log.debug("요청 {} 실행 시작, 유형: {}", request.getRequestId(), request.getRequestType());
 
             T result = switch (request.getRequestType()) {
-                case EXTRACT_PUUID -> (T) executePuuidRequest((RiotApiRequest<?>) request);
-                case EXTRACT_SUMMONER_INFO -> (T) executeSummonerInfoRequest((RiotApiRequest<?>) request);
-                case EXTRACT_LEAGUE_INFO -> (T) executeLeagueInfoRequest((RiotApiRequest<?>) request);
-                case EXTRACT_MATCH_IDS -> (T) executeMatchIdsRequest((RiotApiRequest<?>) request);
-                case GET_MATCH_DETAILS -> (T) executeMatchDetailsRequest((RiotApiRequest<?>) request);
+                case EXTRACT_PUUID -> (T) executePuuidRequest(request);
+                case EXTRACT_SUMMONER_INFO -> (T) executeSummonerInfoRequest(request);
+                case EXTRACT_LEAGUE_INFO -> (T) executeLeagueInfoRequest(request);
+                case EXTRACT_MATCH_IDS -> (T) executeMatchIdsRequest(request);
+                case GET_MATCH_DETAILS -> (T) executeMatchDetailsRequest(request);
                 default -> {
                     log.error("지원하지 않는 요청 유형: {}", request.getRequestType());
                     throw new IllegalArgumentException("지원하지 않는 요청 타입: " + request.getRequestType());
