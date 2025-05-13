@@ -311,9 +311,14 @@ public class RiotClientService {
             if (existingFavorite != null) {
                 existingFavorite.update(playCount, championWinCount);
             } else {
-                Favorite newFavorite = new Favorite(
-                        accountId, queueType, championName, playCount, championWinCount);
-                favoriteRepository.save(newFavorite);
+                Favorite favorite = Favorite.of(
+                        accountId,
+                        queueType,
+                        championName,
+                        playCount,
+                        championWinCount
+                );
+                favoriteRepository.save(favorite);
             }
         }
     }

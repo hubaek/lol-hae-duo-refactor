@@ -31,12 +31,16 @@ public class Favorite {
     @Column(nullable = false)
     private int winCount = 0;
 
-    public Favorite(Long accountId, QueueType queueType, String key, int playCount, int winCount) {
+    private Favorite(Long accountId, QueueType queueType, String key, int playCount, int winCount) {
         this.accountId = accountId;
         this.queueType = queueType;
         this.championName = key;
         this.playCount = playCount;
         this.winCount = winCount;
+    }
+
+    public static Favorite of(Long accountId, QueueType queueType, String key, int playCount, int winCount) {
+        return new Favorite(accountId, queueType, key, playCount, winCount);
     }
 
     public void update(int playCount, int winCount) {
