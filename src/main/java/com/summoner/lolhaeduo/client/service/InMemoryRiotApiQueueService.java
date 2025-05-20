@@ -39,6 +39,9 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
 
     private final AtomicBoolean isProcessing = new AtomicBoolean(false);
 
+    // 결과를 저장할 Future Map 추가
+    private final Map<String, CompletableFuture<?>> futureMap = new ConcurrentHashMap<>();
+
     @PostConstruct
     public void init() {
         // 큐 처리 스케줄러 시작 (2000ms마다)
@@ -56,20 +59,24 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
 
     @Override
     public <T> CompletableFuture<T> enqueueRequest(RiotApiRequest.RequestType requestType, Map<String, Object> parameters) {
+        String requestId = UUID.randomUUID().toString();
+        CompletableFuture<T> future = new CompletableFuture<>();
+
+        futureMap.put(requestId, future);
+
         RiotApiRequest<T> request = RiotApiRequest.<T>builder()
-                .requestId(UUID.randomUUID().toString())
+                .requestId(requestId)
                 .requestType(requestType)
                 .parameters(parameters)
                 .retryCount(0)
                 .createdAt(LocalDateTime.now())
                 .nextAttemptTime(LocalDateTime.now())
-                .resultFuture(new CompletableFuture<>())
                 .build();
 
         requestQueue.add(request);
         log.info("요청이 큐에 추가됨: {}, 유형: {}", request.getRequestId(), requestType);
 
-        return request.getResultFuture();
+        return future;
     }
 
     private void processQueue() {
@@ -119,17 +126,31 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
             long startTime = System.currentTimeMillis();
             log.debug("요청 {} 실행 시작, 유형: {}", request.getRequestId(), request.getRequestType());
 
+            // Future 맵에서 가져와서 완료 처리
+            CompletableFuture<T> future = (CompletableFuture<T>) futureMap.get(request.getRequestId());
+            if (future == null) {
+                log.warn("요청 {}에 대한 Future를 찾을 수 없습니다.", request.getRequestId());
+                return;
+            }
+
             T result = switch (request.getRequestType()) {
                 case EXTRACT_PUUID -> (T) executePuuidRequest((RiotApiRequest<PuuidResponse>) request);
-                case EXTRACT_SUMMONER_INFO -> (T) executeSummonerInfoRequest((RiotApiRequest<SummonerResponse>) request);
-                case EXTRACT_LEAGUE_INFO -> (T) executeLeagueInfoRequest((RiotApiRequest<List<LeagueEntryResponse>>) request);
+                case EXTRACT_SUMMONER_INFO ->
+                        (T) executeSummonerInfoRequest((RiotApiRequest<SummonerResponse>) request);
+                case EXTRACT_LEAGUE_INFO ->
+                        (T) executeLeagueInfoRequest((RiotApiRequest<List<LeagueEntryResponse>>) request);
                 case EXTRACT_MATCH_IDS -> (T) executeMatchIdsRequest((RiotApiRequest<List<String>>) request);
-                case GET_MATCH_DETAILS -> (T) executeMatchDetailsRequest((RiotApiRequest<FormattedMatchResponse>) request);
+                case GET_MATCH_DETAILS ->
+                        (T) executeMatchDetailsRequest((RiotApiRequest<FormattedMatchResponse>) request);
                 default -> {
                     log.error("지원하지 않는 요청 유형: {}", request.getRequestType());
                     throw new IllegalArgumentException("지원하지 않는 요청 타입: " + request.getRequestType());
                 }
             };
+
+            // futureMap 에서 가져온 Future 사용
+            future.complete(result);
+            futureMap.remove(request.getRequestId());
 
             request.getResultFuture().complete(result);
             long duration = System.currentTimeMillis() - startTime;
@@ -146,8 +167,11 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
                 log.warn("요청 {} 실패, 재시도 #{} - {}ms 후",
                         request.getRequestId(), request.getRetryCount(), backoffMillis);
             } else {
-                log.error("요청 {} 최대 재시도 횟수 초과 실패", request.getRequestId(), e);
-                request.getResultFuture().completeExceptionally(e);
+                CompletableFuture<T> future = (CompletableFuture<T>) futureMap.get(request.getRequestId());
+                if (future != null) {
+                    future.completeExceptionally(e);
+                    futureMap.remove(request.getRequestId());
+                }
             }
         }
     }
@@ -173,6 +197,7 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
 
         return riotClient.extractSummonerInfo(puuid, server);
     }
+
     private List<LeagueEntryResponse> executeLeagueInfoRequest(RiotApiRequest<List<LeagueEntryResponse>> request) {
         String summonerId = (String) request.getParameters().get("summonerId");
         AccountServer server = (AccountServer) request.getParameters().get("server");
