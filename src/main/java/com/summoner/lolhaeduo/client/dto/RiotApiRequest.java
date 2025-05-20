@@ -25,7 +25,6 @@ public class RiotApiRequest<T> implements Serializable {
     private int retryCount;
     private LocalDateTime createdAt;
     private LocalDateTime nextAttemptTime;
-    private transient CompletableFuture<T> resultFuture;
 
     public enum RequestType {
         EXTRACT_PUUID,
