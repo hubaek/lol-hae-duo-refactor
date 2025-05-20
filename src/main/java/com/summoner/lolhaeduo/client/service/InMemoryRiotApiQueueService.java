@@ -21,6 +21,11 @@ import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * 메모리 기반의 Riot API 요청 큐 서비스
+ * 현재 레디스 환경으로 변경을 하여서 현재는 사용하지 않음
+ */
+@Deprecated
 @Service
 @Profile("inmemory")
 @Slf4j
@@ -152,7 +157,6 @@ public class InMemoryRiotApiQueueService implements RiotApiQueueService {
             future.complete(result);
             futureMap.remove(request.getRequestId());
 
-            request.getResultFuture().complete(result);
             long duration = System.currentTimeMillis() - startTime;
             log.info("요청 {} 성공적으로 완료됨, 소요 시간: {}ms", request.getRequestId(), duration);
 
