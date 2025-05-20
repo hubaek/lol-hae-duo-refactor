@@ -25,13 +25,22 @@ public class JwtExceptionFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             log.error(e.getMessage(), e);
 
-            HttpStatus httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
-            servletResponse.setStatus(httpStatus.value());
-            servletResponse.setContentType("application/json");
-            servletResponse.setCharacterEncoding("utf-8");
-
-            String json = new ObjectMapper().writeValueAsString(new FilterExceptionResponse(httpStatus, e.getMessage()));
-            servletResponse.getWriter().write(json);
+            // 응답이 이미 커밋되었으면 아무 작업하지 않음
+            if (servletResponse.isCommitted()) {
+                return;
+            }
+            // 오류 응답 설정
+            setErrorResponse(servletResponse, e);
         }
+    }
+
+    private static void setErrorResponse(HttpServletResponse servletResponse, Exception e) throws IOException {
+        HttpStatus httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
+        servletResponse.setStatus(httpStatus.value());
+        servletResponse.setContentType("application/json");
+        servletResponse.setCharacterEncoding("utf-8");
+
+        String json = new ObjectMapper().writeValueAsString(new FilterExceptionResponse(httpStatus, e.getMessage()));
+        servletResponse.getWriter().write(json);
     }
 }
