@@ -17,26 +17,21 @@ import java.util.List;
 public class WebConfig implements WebMvcConfigurer {
 
     private final AuthArgumentResolver authArgumentResolver;
+    private final ObjectMapper objectMapper;
 
     @Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
         resolvers.add(authArgumentResolver);
     }
 
-    @Bean(name = "webObjectMapper")
-    public ObjectMapper objectMapper() {
-        ObjectMapper objectMapper = new ObjectMapper();
 
-        // Java 8 날짜/시간 모듈 등록
-        objectMapper.registerModule(new JavaTimeModule());
-
-        // HTTP 요청/응답에 필요한 설정 추가
-        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        return objectMapper;
-    }
+    /**
+     * HTTP 요청/응답 처리를 위한 Jackson 변환기 설정
+     * 기본 ObjectMapper를 사용하여 JSON 변환을 수행 - 일관된 설정 유지
+     */
 
     @Bean
     public MappingJackson2HttpMessageConverter mappingJackson2HttpMessageConverter() {
-        return new MappingJackson2HttpMessageConverter(objectMapper());
+        return new MappingJackson2HttpMessageConverter(objectMapper);
     }
 }
